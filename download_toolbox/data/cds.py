@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from download_toolbox.data.cli import download_args
-from download_toolbox.data.interfaces.downloader import ClimateDownloader
+from download_toolbox.cli import download_args
+from download_toolbox.download import ClimateDownloader
 
 """
 Module to download hourly ERA5 reanalysis latitude-longitude maps,

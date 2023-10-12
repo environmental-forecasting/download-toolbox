@@ -9,14 +9,14 @@ from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from itertools import product
 
-from download_toolbox.data.sic.mask import Masks
-from download_toolbox.data.sic.utils import SIC_HEMI_STR
-from download_toolbox.data.producers import Downloader
+from download_toolbox.masks.mask import Masks
+from download_toolbox.utils import SIC_HEMI_STR
+from download_toolbox.producers import Downloader
 from download_toolbox.data.utils import assign_lat_lon_coord_system, \
     gridcell_angles_from_dim_coords, \
     invert_gridcell_angles, \
     rotate_grid_vectors
-from download_toolbox.data.interfaces.utils import batch_requested_dates
+from download_toolbox.data.utils import batch_requested_dates
 from download_toolbox.utils import run_command
 
 import iris

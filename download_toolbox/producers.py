@@ -26,7 +26,7 @@ class DataCollection(HemisphereMixin, metaclass=ABCMeta):
                  identifier: object = None,
                  north: bool = True,
                  south: bool = False,
-                 path: str = os.path.join(".", "data"),
+                 path: str = os.path.join("data", "data"),
                  **kwargs):
         self._identifier = identifier
         self._path = os.path.join(path, identifier)

@@ -7,10 +7,9 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from icenet.data.cli import download_args
-from icenet.data.producers import Generator
-from icenet.utils import run_command
-from icenet.data.sic.utils import SIC_HEMI_STR
+from download_toolbox.cli import download_args
+from download_toolbox.producers import Generator
+from download_toolbox.utils import run_command, SIC_HEMI_STR
 
 """Sea Ice Masks
 
@@ -50,6 +49,9 @@ class Masks(Generator):
         self._region = (slice(None, None), slice(None, None))
 
         self.init_params()
+
+        raise RuntimeError("We will not instantiate this currently, it is a dedicated OSISAF masks object, which needs "
+                           "re-implementation now that we're developing download-toolbox")
 
     def init_params(self):
         """

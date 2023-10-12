@@ -9,9 +9,9 @@ import ecmwfapi
 import pandas as pd
 import xarray as xr
 
-from download_toolbox.data.cli import download_args
-from download_toolbox.data.interfaces.downloader import ClimateDownloader
-from download_toolbox.data.interfaces.utils import batch_requested_dates
+from download_toolbox.cli import download_args
+from download_toolbox.download import ClimateDownloader
+from download_toolbox.data.utils import batch_requested_dates
 
 """
 

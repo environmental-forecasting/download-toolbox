@@ -11,11 +11,10 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from download_toolbox.data.cli import download_args
-from download_toolbox.data.producers import Downloader
-from download_toolbox.data.sic.mask import Masks
-from download_toolbox.utils import Hemisphere, run_command
-from download_toolbox.data.sic.utils import SIC_HEMI_STR, DaskWrapper
+from download_toolbox.cli import download_args
+from download_toolbox.producers import Downloader
+from download_toolbox.masks.mask import Masks
+from download_toolbox.utils import Hemisphere, run_command, SIC_HEMI_STR, DaskWrapper
 
 """
 

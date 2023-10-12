@@ -5,7 +5,6 @@ import gzip
 import logging
 import os
 
-import datetime as dt
 from ftplib import FTP
 
 import datetime as dt
@@ -13,10 +12,10 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from download_toolbox.data.cli import download_args
-from download_toolbox.data.producers import Downloader
-from download_toolbox.data.sic.mask import Masks
-from download_toolbox.data.sic.utils import DaskWrapper
+from download_toolbox.cli import download_args
+from download_toolbox.producers import Downloader
+from download_toolbox.masks.mask import Masks
+from download_toolbox.utils import DaskWrapper
 
 
 var_remove_list = ["polar_stereographic", "land"]
