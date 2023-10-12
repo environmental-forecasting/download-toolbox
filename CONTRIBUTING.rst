@@ -38,9 +38,8 @@ and "help wanted" is open to whoever wants to implement it.
 Write Documentation
 ~~~~~~~~~~~~~~~~~~~
 
-IceNet could always use more documentation, whether as part of the
-official IceNet docs, in docstrings, or even on the web in blog posts,
-articles, and such.
+The Download Toolkbox could always use more documentation, whether as part of the
+official toolbox docs, in docstrings, or even on the web in blog posts, articles, and such.
 
 Submit Feedback
 ~~~~~~~~~~~~~~~
@@ -79,7 +78,7 @@ Ready to contribute? Here's how to set up `download-toolbox` for local developme
 5. When you're done making changes, check that your changes pass flake8 and the
    tests, including testing other Python versions with tox::
 
-    $ flake8 icenet tests
+    $ flake8 download_toolbox tests
     $ python setup.py test or pytest
     $ tox
 

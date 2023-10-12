@@ -2,4 +2,5 @@
 Credits
 =======
 
-The IceNet Team
+James Byrne
+Tom Andersson

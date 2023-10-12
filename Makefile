@@ -48,9 +48,9 @@ clean-test: ## remove test and coverage artifacts
 	rm -fr .pytest_cache
 
 lint/flake8: ## check style with flake8
-	flake8 --extend-ignore "W291,W293,E501,W391,E712,E266,E251" icenet
+	flake8 --extend-ignore "W291,W293,E501,W391,E712,E266,E251" download_toolbox
 lint/black: ## check style with black
-	black --check icenet
+	black --check download_toolbox
 
 lint: lint/flake8 lint/black ## check style
 
@@ -61,15 +61,15 @@ test-all: ## run tests on every Python version with tox
 	tox
 
 coverage: ## check code coverage quickly with the default Python
-	coverage run --source icenet -m pytest
+	coverage run --source download_toolbox -m pytest
 	coverage report -m
 	coverage html
 	$(BROWSER) htmlcov/index.html
 
 docs: ## generate Sphinx HTML documentation, including API docs
-	rm -f docs/icenet.rst
+	rm -f docs/download_toolbox.rst
 	rm -f docs/modules.rst
-	sphinx-apidoc -o docs/ icenet
+	sphinx-apidoc -o docs/ download_toolbox
 	$(MAKE) -C docs clean
 	$(MAKE) -C docs html
 	$(BROWSER) docs/_build/html/index.html
