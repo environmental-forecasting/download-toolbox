@@ -32,28 +32,21 @@ setup(
         "Natural Language :: English",
         "Operating System :: POSIX",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         ],
     entry_points={
         "console_scripts": [
-            "download_cmip = download_toolbox.data.interfaces.esgf:main",
-            "download_era5 = download_toolbox.data.interfaces.cds:main",
-            "download_oras5 = download_toolbox.data.interfaces.cmems:main",
-            "download_hres = download_toolbox.data.interfaces.mars:hres_main",
-            "download_seas = download_toolbox.data.interfaces.mars:seas_main",
-            "download_sic = download_toolbox.data.interfaces.osisaf:main",
-
-            # TODO: endpoints to migrate?
-            # "icenet_data_reproc_monthly = icenet.data.interfaces.utils:reprocess_main",
-            # "icenet_data_add_time_dim = icenet.data.interfaces.utils:add_time_dim_main",
-
-            # "icenet_video_data = icenet.plotting.video:data_cli",
-        ],
-        },
-    python_requires='>=3.7, <4',
+            "download_cmip = download_toolbox.data.esgf:main",
+            "download_era5 = download_toolbox.data.cds:main",
+            "download_oras5 = download_toolbox.data.cmems:main",
+            "download_hres = download_toolbox.data.mars:hres_main",
+            "download_seas = download_toolbox.data.mars:seas_main",
+            "download_osisaf = download_toolbox.data.osisaf:main",
+            "download_amsr2 = download_toolbox.data.amsr:main",
+        ],},
+    python_requires='>=3.8, <4',
     install_requires=get_content("requirements.txt"),
     include_package_data=True,
     extras_require={
