@@ -62,7 +62,8 @@ dev = [
   "pytest",
   "black",
   "build",
-  "importlib_metadata"
+  "importlib_metadata",
+  "pre-commit"
 ]
 docs = [
   "jinja2",

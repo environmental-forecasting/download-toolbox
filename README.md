@@ -32,6 +32,13 @@ Please refer to [the contribution guidelines for more information.](CONTRIBUTING
 When installed, the library will provide a series of CLI commands. Please use 
 the `--help` switch for more initial information, or the documentation. 
 
+## Limitations
+
+There are some major limitations to this as a general purpose tool, these will 
+hopefully be dealt with in time! They likely don't have issues related, yet.
+
+* Works only for hemisphere level downloading - north or south. The overhaul for this intends to ensure that identifiers are used so that someone can specify "north" or "south" but equally specify "Norway" or "The Shops" and then provide a geolocation that would identify the dataset within the filesystem. 
+
 ## Contributing 
 
 Please refer to [the contribution guidelines for more information.](CONTRIBUTING.rst)

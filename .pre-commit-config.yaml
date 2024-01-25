@@ -1,0 +1,27 @@
+exclude: (LICENSE|README.md)
+repos:
+  # General pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-toml
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        language_version: python3
+
+  # ruff - Linting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.6
+    hooks:
+      - id: ruff
+        args: []
+
+  - repo: local
+    hooks:
+      # Run pytest
+      - id: pytest
+        name: Run pytest
+        entry: pytest
+        language: system
+        pass_filenames: false
