@@ -248,9 +248,7 @@ class ERA5Downloader(ClimateDownloader):
         var_name = datafile_path.split(os.sep)[self._var_name_idx]
         
         if var_name == 'tos':
-            # Overwrite maksed values with zeros
             logging.debug("ERA5 regrid postprocess: {}".format(var_name))
-            cube_ease.data[cube_ease.data.mask] = 0.
             cube_ease.data = cube_ease.data.data
             cube_ease.data = np.where(np.isnan(cube_ease.data), 0., cube_ease.data)
         elif var_name in ['zg500', 'zg250']:

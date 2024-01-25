@@ -230,8 +230,6 @@ retrieve,
         if var_name == 'tos':
             # Overwrite maksed values with zeros
             logging.debug("MARS additional regrid: {}".format(var_name))
-            cube_ease.data[cube_ease.data.mask] = 0.
-            cube_ease.data[:, self._masks.get_land_mask()] = 0.
             cube_ease.data = cube_ease.data.data
 
         if var_name in ['rlds', 'rsds']:

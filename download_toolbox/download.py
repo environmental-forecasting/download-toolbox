@@ -9,7 +9,6 @@ from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from itertools import product
 
-from download_toolbox.masks.mask import Masks
 from download_toolbox.utils import SIC_HEMI_STR
 from download_toolbox.producers import Downloader
 from download_toolbox.data.utils import assign_lat_lon_coord_system, \
@@ -161,7 +160,6 @@ class ClimateDownloader(Downloader):
         self._files_downloaded = []
         self._group_dates_by = group_dates_by
         self._levels = list(levels)
-        self._masks = Masks(north=self.north, south=self.south)
         self._max_threads = max_threads
         self._postprocess = postprocess
         self._pregrid_prefix = pregrid_prefix

@@ -14,7 +14,6 @@ import xarray as xr
 
 from download_toolbox.cli import download_args
 from download_toolbox.producers import Downloader
-from download_toolbox.masks.mask import Masks
 from download_toolbox.utils import DaskWrapper
 
 
@@ -89,12 +88,6 @@ class AMSRDownloader(Downloader):
         self._delete = delete_tempfiles
         self._download = download
         self._dtype = dtype
-        self._masks = Masks(north=self.north, south=self.south)
-
-        self._mask_dict = {
-            month: self._masks.get_active_cell_mask(month)
-            for month in np.arange(1, 12+1)
-        }
 
     def download(self):
         """
@@ -241,11 +234,6 @@ class AMSRDownloader(Downloader):
             da = da.where(da <= 100, 0.)
             da /= 100.  # Convert from SIC % to fraction
 
-            # TODO: validate, are we to be applying the OSISAF mask?
-            # It will need substantial reprojection if so
-            #for month, mask in self._mask_dict.items():
-            #    da.loc[dict(time=(da['time.month'] == month))].values[:, ~mask] = 0.
-
             var_folder = self.get_data_var_folder(var)
             group_by = "time.year"
 
@@ -347,9 +335,6 @@ class AMSRDownloader(Downloader):
 
             if not os.path.exists(fpath):
                 day_da = da.sel(time=slice(date, date))
-                mask = self._mask_dict[pd.to_datetime(date).month]
-
-                day_da.data[0][~mask] = 0.
 
                 logging.info("Writing missing date file {}".format(fpath))
                 day_da.to_netcdf(fpath)

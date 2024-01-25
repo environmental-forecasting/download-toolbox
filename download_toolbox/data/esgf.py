@@ -204,16 +204,10 @@ class CMIP6Downloader(ClimateDownloader):
 
         # TODO: regrid fixes need better implementations
         if var_name == "siconca":
-            cube_ease.data[cube_ease.data.mask] = 0.
-            cube_ease.data[:, self._masks.get_land_mask()] = 0.
-
             if self._source == 'MRI-ESM2-0':
                 cube_ease.data = cube_ease.data / 100.
             cube_ease.data = cube_ease.data.data
         elif var_name in ["tos", "hus1000"]:
-            cube_ease.data[cube_ease.data.mask] = 0.
-            cube_ease.data[:, self._masks.get_land_mask()] = 0.
-
             cube_ease.data = cube_ease.data.data
 
         if cube_ease.data.dtype != np.float32:

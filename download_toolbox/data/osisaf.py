@@ -13,7 +13,6 @@ import xarray as xr
 
 from download_toolbox.cli import download_args
 from download_toolbox.producers import Downloader
-from download_toolbox.masks.mask import Masks
 from download_toolbox.utils import Hemisphere, run_command, SIC_HEMI_STR, DaskWrapper
 
 """
@@ -238,15 +237,9 @@ class SICDownloader(Downloader):
         self._dtype = dtype
         self._invalid_dates = invalid_sic_days[self.hemisphere] + \
             list(additional_invalid_dates)
-        self._masks = Masks(north=self.north, south=self.south)
 
         self._ftp_osi450 = "/reprocessed/ice/conc/v2p0/{:04d}/{:02d}/"
         self._ftp_osi430b = "/reprocessed/ice/conc-cont-reproc/v2p0/{:04d}/{:02d}/"
-
-        self._mask_dict = {
-            month: self._masks.get_active_cell_mask(month)
-            for month in np.arange(1, 12+1)
-        }
 
     def download(self):
         """
@@ -401,10 +394,6 @@ class SICDownloader(Downloader):
                                                                      hs,
                                                                      coord)
 
-            # In experimenting, I don't think this is actually required
-            for month, mask in self._mask_dict.items():
-                da.loc[dict(time=(da['time.month'] == month))].values[:, ~mask] = 0.
-
             for date in da.time.values:
                 day_da = da.sel(time=slice(date, date))
 
@@ -525,9 +514,6 @@ class SICDownloader(Downloader):
 
             if not os.path.exists(fpath):
                 day_da = da.sel(time=slice(date, date))
-                mask = self._mask_dict[pd.to_datetime(date).month]
-
-                day_da.data[0][~mask] = 0.
 
                 logging.info("Writing missing date file {}".format(fpath))
                 day_da.to_netcdf(fpath)
