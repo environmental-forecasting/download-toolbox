@@ -1,0 +1,81 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "download-toolbox"
+dynamic = ["version", "readme"]
+requires-python = ">=3.8"
+description = "Library for downloading and preprocessing data"
+license = { file = "LICENSE" }
+authors = [{name = "British Antarctic Survey / Alan Turing Institute"}]
+maintainers = [
+  { email = "jambyr@bas.ac.uk" }
+]
+dependencies = [
+  "cdsapi",
+  "eccodes",
+  "ecmwf-api-client",
+  "pip",
+  "scitools-iris",
+  "setuptools",
+  "wheel",
+  "xarray[io]"
+]
+classifiers = [
+    "Development Status :: 3",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+
+[project.scripts]
+download_cmip = "download_toolbox.data.esgf:main"
+download_era5 = "download_toolbox.data.cds:main"
+download_oras5 = "download_toolbox.data.cmems:main"
+download_hres = "download_toolbox.data.mars:hres_main"
+download_seas = "download_toolbox.data.mars:seas_main"
+download_osisaf = "download_toolbox.data.osisaf:main"
+download_amsr2 = "download_toolbox.data.amsr:main"
+
+[tool.setuptools]
+py-modules = ["download_toolbox"]
+
+[tool.setuptools.dynamic]
+version = {attr = "download_toolbox.__version__"}
+readme = {file = ["README.md"]}
+
+[project.optional-dependencies]
+dev = [
+  "watchdog",
+  "flake8",
+  "tox",
+  "coverage",
+  "twine",
+  "pytest",
+  "black",
+  "build",
+  "importlib_metadata"
+]
+docs = [
+  "jinja2",
+  "Sphinx"
+]
+
+[project.urls]
+"Homepage" = "https://icenet.ai/"
+"Source" = "https://github.com/antarctica/download-toolbox"
+"Issue tracker" = "https://github.com/antarctica/download-toolbox/issues"
+
+[tool.pytest.ini_options]
+addopts = "-ra --ignore=setup.py"
+testpaths = [
+    "download_toolbox",
+]
