@@ -264,7 +264,7 @@ def main():
                          workers=True, extra_args=(
         (("-n", "--do-not-download"),
          dict(dest="download", action="store_false", default=True)),
-        (("-p", "--do-not-postprocess"),
+        (("-s", "--do-not-postprocess"),
          dict(dest="postprocess", action="store_false", default=True))))
 
     logging.info("ERA5 Data Downloading")
