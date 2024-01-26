@@ -26,7 +26,7 @@ class DataCollection(HemisphereMixin, metaclass=ABCMeta):
                  identifier: object = None,
                  north: bool = True,
                  south: bool = False,
-                 path: str = os.path.join("data", "data"),
+                 path: str = os.path.join("data"),
                  **kwargs):
         self._identifier = identifier
         self._path = os.path.join(path, identifier)
@@ -130,7 +130,7 @@ class Downloader(DataProducer):
 
 class Generator(DataProducer):
     """
-    
+
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -146,13 +146,13 @@ class Generator(DataProducer):
 
 class Processor(DataProducer):
     """
-    
-    :param identifier: 
-    :param source_data: 
-    :param *args: 
-    :param file_filters: 
-    :param test_dates: 
-    :param train_dates: 
+
+    :param identifier:
+    :param source_data:
+    :param *args:
+    :param file_filters:
+    :param test_dates:
+    :param train_dates:
     :param val_dates:
     """
     def __init__(self,
@@ -254,7 +254,7 @@ class Processor(DataProducer):
                 try:
                     match_dfs = dt_series[date.strftime("%Y")]
 
-                    if type(match_dfs) == str:
+                    if isinstance(match_dfs, str):
                         match_dfs = [match_dfs]
                 except KeyError:
                     logging.info("No data found for {}, outside data boundary "
