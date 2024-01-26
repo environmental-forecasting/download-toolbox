@@ -1,3 +1,4 @@
+import datetime as dt
 import logging
 import subprocess as sp
 
@@ -5,13 +6,19 @@ from enum import Flag, auto
 from functools import wraps
 
 import dask
-from dask.distributed import LocalCluster
+from dask.distributed import Client, LocalCluster
 
 
 SIC_HEMI_STR = dict(
     north="nh",
     south="sh"
 )
+
+
+def json_serialize(x):
+    if isinstance(x, dt.date) or isinstance(x, dt.datetime):
+        return x.isoformat()
+    return str(x)
 
 
 class Hemisphere(Flag):
