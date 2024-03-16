@@ -13,14 +13,15 @@ maintainers = [
   { email = "jambyr@bas.ac.uk" }
 ]
 dependencies = [
-  "cdsapi",
-  "eccodes",
-  "ecmwf-api-client",
-  "pip",
-  "scitools-iris",
-  "setuptools",
-  "wheel",
-  "xarray[io]"
+    "cdsapi",
+    "eccodes",
+    "ecmwf-api-client",
+    "esgf-pyclient",
+    "pip",
+    "scitools-iris",
+    "setuptools",
+    "wheel",
+    "xarray[io]"
 ]
 classifiers = [
     "Development Status :: 3",
