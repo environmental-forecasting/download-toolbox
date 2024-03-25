@@ -9,63 +9,10 @@ import dask
 from dask.distributed import Client, LocalCluster
 
 
-SIC_HEMI_STR = dict(
-    north="nh",
-    south="sh"
-)
-
-
 def json_serialize(x):
     if isinstance(x, dt.date) or isinstance(x, dt.datetime):
         return x.isoformat()
     return str(x)
-
-
-class Hemisphere(Flag):
-    """
-
-    """
-
-    NONE = 0
-    NORTH = auto()
-    SOUTH = auto()
-    BOTH = NORTH | SOUTH
-
-
-class HemisphereMixin:
-    """
-
-    """
-
-    _hemisphere = Hemisphere.NONE
-
-    @property
-    def hemisphere(self):
-        return self._hemisphere
-
-    @property
-    def hemisphere_str(self):
-        return ["north"] if self.north else \
-               ["south"] if self.south else \
-               ["north", "south"]
-
-    @property
-    def hemisphere_loc(self):
-        return [90, -180, 0, 180] if self.north else \
-               [0, -180, -90, 180] if self.south else \
-               [90, -180, -90, 180]
-
-    @property
-    def north(self):
-        return (self._hemisphere & Hemisphere.NORTH) == Hemisphere.NORTH
-
-    @property
-    def south(self):
-        return (self._hemisphere & Hemisphere.SOUTH) == Hemisphere.SOUTH
-
-    @property
-    def both(self):
-        return self._hemisphere & Hemisphere.BOTH
 
 
 def run_command(command: str, dry: bool = False):
@@ -107,7 +54,8 @@ def setup_logging(func,
             format=log_format,
             datefmt="%d-%m-%y %T",
         )
-
+        # FIXME: something is interrupting the root logger setup
+        logging.getLogger().setLevel(level)
         # TODO: better way of handling these on a case by case basis
         logging.getLogger("cdsapi").setLevel(logging.WARNING)
         logging.getLogger("requests").setLevel(logging.WARNING)

@@ -16,8 +16,8 @@ from download_toolbox.utils import setup_logging
 def date_arg(string: str) -> object:
     """
 
-    :param string: 
-    :return: 
+    :param string:
+    :return:
     """
     date_match = re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})", string)
     return dt.date(*[int(s) for s in date_match.groups()])
@@ -26,8 +26,8 @@ def date_arg(string: str) -> object:
 def dates_arg(string: str) -> object:
     """
 
-    :param string: 
-    :return: 
+    :param string:
+    :return:
     """
     if string == "none":
         return []
@@ -48,7 +48,7 @@ def csv_arg(string: str) -> list:
     """
     csv_items = []
     string = re.sub(r'^\'(.*)\'$', r'\1', string)
-    
+
     for el in string.split(","):
         if len(el) == 0:
             csv_items.append(None)
@@ -108,7 +108,7 @@ def download_args(choices: object = None,
     ap = argparse.ArgumentParser()
     ap.add_argument("hemisphere", choices=("north", "south"))
 
-    if choices and type(choices) == list:
+    if choices and isinstance(choices, list):
         ap.add_argument("-c", "--choice", choices=choices, default=choices[0])
 
     if dates:
@@ -119,7 +119,7 @@ def download_args(choices: object = None,
 
     if workers:
         ap.add_argument("-w", "--workers", default=8, type=int)
-    
+
     ap.add_argument("-p", "--parallel-opens",
                     default=False, action="store_true",
                     help="Allow xarray mfdataset to work with parallel opens")
@@ -129,11 +129,11 @@ def download_args(choices: object = None,
     ap.add_argument("-v", "--verbose", action="store_true", default=False)
 
     if var_specs:
-        ap.add_argument("--vars",
+        ap.add_argument("vars",
                         help="Comma separated list of vars",
                         type=csv_arg,
                         default=[])
-        ap.add_argument("--levels",
+        ap.add_argument("levels",
                         help="Comma separated list of pressures/depths as needed, "
                              "use zero length string if None (e.g. ',,500,,,') and "
                              "pipes for multiple per var (e.g. ',,250|500,,'",
@@ -143,108 +143,9 @@ def download_args(choices: object = None,
     for arg in extra_args:
         ap.add_argument(*arg[0], **arg[1])
     args = ap.parse_args()
+
+    if var_specs:
+        assert len(args.vars) > 0 and len(args.vars) == len(args.levels), \
+            "You must specify variables and levels of equal length, >=1"
+
     return args
-
-
-@setup_logging
-def process_args(dates: bool = True,
-                 ref_option: bool = True,
-                 extra_args: object = ()) -> object:
-    """
-
-    :param dates:
-    :param ref_option:
-    :param extra_args:
-    :return:
-    """
-
-    ap = argparse.ArgumentParser()
-    ap.add_argument("name", type=str)
-    ap.add_argument("hemisphere", choices=("north", "south"))
-
-    if dates:
-        add_date_args(ap)
-
-    ap.add_argument("-l", "--lag", type=int, default=2)
-    ap.add_argument("-f", "--forecast", type=int, default=93)
-    ap.add_argument("-p", "--parallel-opens",
-                    default=False, action="store_true",
-                    help="Allow xarray mfdataset to work with parallel opens")
-
-    ap.add_argument("--abs",
-                    help="Comma separated list of abs vars",
-                    type=csv_arg,
-                    default=[])
-    ap.add_argument("--anom",
-                    help="Comma separated list of abs vars",
-                    type=csv_arg,
-                    default=[])
-    ap.add_argument("--trends",
-                    help="Comma separated list of abs vars",
-                    type=csv_arg,
-                    default=[])
-    ap.add_argument("--trend-lead",
-                    help="Time steps in the future for linear trends",
-                    type=int_or_list_arg,
-                    default=93)
-
-    for arg in extra_args:
-        ap.add_argument(*arg[0], **arg[1])
-
-    if ref_option:
-        ap.add_argument("-r", "--ref",
-                        help="Reference loader for normalisations etc",
-                        default=None, type=str)
-    ap.add_argument("-v", "--verbose", action="store_true", default=False)
-
-    ap.add_argument("-u", "--update-key",
-                    default=None,
-                    help="Add update key to processor to avoid overwriting default"
-                         "entries in the loader configuration",
-                    type=str)
-
-    args = ap.parse_args()
-    return args
-
-
-def add_date_args(arg_parser: object):
-    """
-
-    :param arg_parser:
-    """
-    arg_parser.add_argument("-ns", "--train_start",
-                            type=dates_arg, required=False, default=[])
-    arg_parser.add_argument("-ne", "--train_end",
-                            type=dates_arg, required=False, default=[])
-    arg_parser.add_argument("-vs", "--val_start",
-                            type=dates_arg, required=False, default=[])
-    arg_parser.add_argument("-ve", "--val_end",
-                            type=dates_arg, required=False, default=[])
-    arg_parser.add_argument("-ts", "--test-start",
-                            type=dates_arg, required=False, default=[])
-    arg_parser.add_argument("-te", "--test-end", dest="test_end",
-                            type=dates_arg, required=False, default=[])
-
-
-def process_date_args(args: object) -> dict:
-    """
-
-    :param args:
-    :return:
-    """
-    dates = dict(train=[], val=[], test=[])
-
-    for dataset in ("train", "val", "test"):
-        dataset_dates = collections.deque()
-
-        for i, period_start in \
-                enumerate(getattr(args, "{}_start".format(dataset))):
-            period_end = getattr(args, "{}_end".format(dataset))[i]
-            dataset_dates += [pd.to_datetime(date).date() for date in
-                              pd.date_range(period_start,
-                                            period_end, freq="D")]
-        logging.info("Got {} dates for {}".format(len(dataset_dates),
-                                                  dataset))
-
-        dates[dataset] = sorted(list(dataset_dates))
-    return dates

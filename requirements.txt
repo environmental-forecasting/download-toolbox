@@ -1,12 +1,13 @@
-cartopy
+# cartopy
 cdsapi
 cfgrib
 distributed
 eccodes
 ecmwf-api-client
+esgf-pyclient
 motuclient
 pydap
 rioxarray
 scitools-iris
 urllib3<2.0.0
-xarray[io]
+xarray[io]<2013.1.0

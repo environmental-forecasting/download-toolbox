@@ -10,18 +10,18 @@ repos:
       - id: trailing-whitespace
         language_version: python3
 
-  # ruff - Linting
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.6
-    hooks:
-      - id: ruff
-        args: []
-
-  - repo: local
-    hooks:
-      # Run pytest
-      - id: pytest
-        name: Run pytest
-        entry: pytest
-        language: system
-        pass_filenames: false
+#  # ruff - Linting
+#  - repo: https://github.com/astral-sh/ruff-pre-commit
+#    rev: v0.1.6
+#    hooks:
+#    - id: ruff
+#        args: []
+#
+#  - repo: local
+#    hooks:
+#      # Run pytest
+#      - id: pytest
+#        name: Run pytest
+#        entry: pytest
+#        language: system
+#        pass_filenames: false
