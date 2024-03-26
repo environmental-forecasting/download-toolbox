@@ -6,6 +6,7 @@ import re
 
 import pandas as pd
 
+from download_toolbox.time import DateRequest
 from download_toolbox.utils import setup_logging
 
 """
@@ -91,6 +92,7 @@ def int_or_list_arg(string: str) -> object:
 def download_args(choices: object = None,
                   dates: bool = True,
                   dates_optional: bool = False,
+                  frequency: bool = True,
                   var_specs: bool = True,
                   workers: bool = False,
                   extra_args: object = ()) -> object:
@@ -116,6 +118,12 @@ def download_args(choices: object = None,
             [["-sd", "--start-date"], ["-ed", "--end-date"]]
         ap.add_argument(*pos_args[0], type=date_arg, default=None)
         ap.add_argument(*pos_args[1], type=date_arg, default=None)
+
+    if frequency:
+        freq_avail = [_.name for _ in list(DateRequest)]
+        ap.add_argument("-f", "--frequency",
+                        choices=freq_avail,
+                        default=freq_avail[-1])
 
     if workers:
         ap.add_argument("-w", "--workers", default=8, type=int)

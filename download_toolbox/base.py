@@ -73,6 +73,7 @@ class DataSet(DataCollection):
     def __init__(self,
                  *args,
                  dry: bool = False,
+                 frequency: object = DateRequest.day,
                  levels: object = (),
                  location: object,
                  overwrite: bool = False,
@@ -81,6 +82,7 @@ class DataSet(DataCollection):
         super(DataSet, self).__init__(*args, **kwargs)
 
         self._dry = dry
+        self._frequency = frequency
         self._levels = list(levels)
         self._location = location
         self._overwrite = overwrite
@@ -138,6 +140,10 @@ class DataSet(DataCollection):
             level=level,
             path=self._get_data_var_folder(var_full_name)
         )
+
+    @property
+    def frequency(self):
+        return self._frequency.value
 
     @property
     def location(self):

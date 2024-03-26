@@ -1,6 +1,6 @@
 import concurrent
 import logging
-from abc import ABC
+from abc import ABCMeta
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -14,7 +14,7 @@ from download_toolbox.data.utils import \
 """
 
 
-class ThreadedDownloader(Downloader, ABC):
+class ThreadedDownloader(Downloader, metaclass=ABCMeta):
     """Data downloader base class for batching downloading
 
     The premise is

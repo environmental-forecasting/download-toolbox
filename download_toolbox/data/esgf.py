@@ -11,6 +11,7 @@ from download_toolbox.base import DataSet, Downloader
 from download_toolbox.cli import download_args
 from download_toolbox.download import ThreadedDownloader
 from download_toolbox.location import Location
+from download_toolbox.time import DateRequest
 
 """
 
@@ -76,7 +77,6 @@ class CMIP6DataSet(DataSet):
                  ),
                  grid_override: object = None,
                  identifier=None,
-                 frequency: str = "day",
                  table_map_override: object = None,
                  **kwargs):
         super().__init__(*args,
@@ -85,7 +85,6 @@ class CMIP6DataSet(DataSet):
                          **kwargs)
 
         self._experiments = experiments
-        self._frequency = frequency
         self._member = member
         self._source = source
 
@@ -97,16 +96,13 @@ class CMIP6DataSet(DataSet):
 
         self._grid_map = CMIP6DataSet.GRID_MAP
         self._grid_map.update(self._grid_override)
-        self._table_map = {k: v.format(self._frequency) for k, v in
-                           getattr(CMIP6DataSet, "{}_TABLE_MAP".format(frequency.upper())).items()}
+        print()
+        self._table_map = {k: v.format(self.frequency) for k, v in
+                           getattr(CMIP6DataSet, "{}_TABLE_MAP".format(self.frequency.upper())).items()}
 
     @property
     def experiments(self):
         return self._experiments
-
-    @property
-    def frequency(self):
-        return self._frequency
 
     @property
     def grid_map(self):
@@ -330,7 +326,7 @@ def main():
         member=args.member,
         source=args.source,
         var_names=args.vars,
-        frequency="mon",
+        frequency=getattr(DateRequest, args.frequency),
     )
 
     downloader = CMIP6Downloader(
