@@ -9,6 +9,7 @@ from pyesgf.search import SearchConnection
 
 from download_toolbox.base import DataSet, Downloader
 from download_toolbox.cli import download_args
+from download_toolbox.download import ThreadedDownloader
 from download_toolbox.location import Location
 
 """
@@ -124,7 +125,7 @@ class CMIP6DataSet(DataSet):
         return self._table_map
 
 
-class CMIP6Downloader(Downloader):
+class CMIP6Downloader(ThreadedDownloader):
     """Climate downloader to provide CMIP6 reanalysis data from ESGF APIs
 
     Useful CMIP6 guidance: https://pcmdi.llnl.gov/CMIP6/Guide/dataUsers.html
@@ -242,9 +243,9 @@ class CMIP6Downloader(Downloader):
             logging.exception("Error encountered: {}".format(e),
                               exc_info=False)
 
-        print("DEBUG: {}".format(cmip6_da))
         self.__connection.close()
-        return cmip6_da
+        self.save_temporal_files(var_config, cmip6_da)
+        cmip6_da.close()
 
     def additional_regrid_processing(self,
                                      datafile: str,
@@ -296,7 +297,7 @@ class CMIP6Downloader(Downloader):
         logging.debug(query)
 
         if ctx.hit_count > 0:
-            result = ctx.search(ignore_facet_check=True)[0]
+            result = ctx.search()[0]
             files = result.file_context().search()
             return [file.opendap_url for file in files]
         return None
@@ -339,6 +340,7 @@ def main():
         delete_tempfiles=args.delete,
         max_threads=args.workers,
         exclude_nodes=args.exclude_server,
+        requests_group_by="year",
     )
 
     logging.info("CMIP downloading: {} {}".format(args.source, args.member))

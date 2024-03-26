@@ -166,8 +166,10 @@ class Downloader(metaclass=abc.ABCMeta):
                  dataset: DataSet,
                  delete_tempfiles: bool = True,
                  download: bool = True,
+                 drop_vars: list = None,
                  end_date: object,
                  postprocess: bool = True,
+                 requests_group_by: str = "month",
                  start_date: object,
                  **kwargs):
         super().__init__()
@@ -177,10 +179,12 @@ class Downloader(metaclass=abc.ABCMeta):
                        pd.date_range(start_date, end_date, freq="D")]
         self._delete = delete_tempfiles
         self._download = download
+        self._drop_vars = list() if drop_vars is None else drop_vars
         self._files_downloaded = []
-        self._group_dates_by = "year"
+        self._output_group_by = "year"
         self._output_date_format = "%Y"
         self._postprocess = postprocess
+        self._requests_group_by = requests_group_by
 
         self._ds = dataset
 
@@ -200,20 +204,15 @@ class Downloader(metaclass=abc.ABCMeta):
 
         """
         for var_config in self._ds.variables:
-            for req_date_batch in batch_requested_dates(dates=self.dates):
+            for req_date_batch in batch_requested_dates(dates=self.dates, attribute=self.requests_group_by):
                 logging.info("Processing single download for {} with {} dates".
                              format(var_config["name"], len(req_date_batch)))
                 temporary_file, destination_file = \
                     self.get_download_filenames(var_config["path"], req_date_batch[0])
-                da = self.download_method(var_config, req_date_batch, temporary_file)
+                self.download_method(var_config, req_date_batch, temporary_file)
 
-                if da is not None:
-                    self.save_temporal_files(var_config, da)
-
-                    if self._postprocess:
-                        self.postprocess(temporary_file, destination_file)
-                else:
-                    logging.warning("Unsuccessful download for {}".format(var_config))
+                if self._postprocess:
+                    self.postprocess(temporary_file, destination_file)
 
     def get_download_filenames(self,
                                var_folder: str,
@@ -256,19 +255,19 @@ class Downloader(metaclass=abc.ABCMeta):
 
         # TODO: Note, https://github.com/pydata/xarray/issues/364 for Grouper functionality?
         #   - we might have to roll our own functionality in the meantime, if necessary
-        group_by = "time.{}".format(self.group_dates_by) if not freq else freq
+        group_by = "time.{}".format(self.output_group_by) if not freq else freq
 
         for dt, dt_da in da.groupby(group_by):
             req_date = pd.to_datetime(dt_da.time.values[0])
-            preprocess_name, target_name = \
+            temporary_name, _ = \
                 self.get_download_filenames(var_config["path"],
                                             req_date,
                                             date_format=date_format)
 
-            logging.info("Retrieving and saving {}".format(preprocess_name))
+            logging.info("Retrieving and saving {}".format(temporary_name))
             dt_da.compute()
-            dt_da.to_netcdf(preprocess_name)
-            self._files_downloaded.append(preprocess_name)
+            dt_da.to_netcdf(temporary_name)
+            self._files_downloaded.append(temporary_name)
 
     @abstractmethod
     def _single_download(self,
@@ -286,6 +285,10 @@ class Downloader(metaclass=abc.ABCMeta):
         return self._dates
 
     @property
+    def delete(self):
+        return self._delete
+
+    @property
     def download_method(self) -> callable:
         if not self._download_method:
             raise RuntimeError("Downloader has no method set, "
@@ -297,5 +300,13 @@ class Downloader(metaclass=abc.ABCMeta):
         self._download_method = method
 
     @property
-    def group_dates_by(self):
-        return self._group_dates_by
+    def drop_vars(self):
+        return self._drop_vars
+
+    @property
+    def output_group_by(self):
+        return self._output_group_by
+
+    @property
+    def requests_group_by(self):
+        return self._requests_group_by
