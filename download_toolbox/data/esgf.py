@@ -72,9 +72,10 @@ class CMIP6DataSet(DataSet):
                  source,
                  member,
                  experiments: object = (
-                    #"historical",
+                    "historical",
                     "ssp245",
                  ),
+                 default_grid: object = None,
                  grid_override: object = None,
                  identifier=None,
                  table_map_override: object = None,
@@ -95,8 +96,10 @@ class CMIP6DataSet(DataSet):
         assert type(self._table_map_override) is dict, "Table map override should be a dictionary if supplied"
 
         self._grid_map = CMIP6DataSet.GRID_MAP
+        if default_grid is not None:
+            self._grid_map = {k: default_grid for k in CMIP6DataSet.GRID_MAP.keys()}
         self._grid_map.update(self._grid_override)
-        print()
+
         self._table_map = {k: v.format(self.frequency) for k, v in
                            getattr(CMIP6DataSet, "{}_TABLE_MAP".format(self.frequency.upper())).items()}
 
@@ -308,6 +311,7 @@ def main():
             (("-xs", "--exclude-server"),
              dict(default=[], nargs="*")),
             (("-o", "--override"), dict(required=None, type=str)),
+            (("-g", "--default-grid"), dict(required=None, type=str)),
         ],
         workers=True
     )
