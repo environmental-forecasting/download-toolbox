@@ -1,5 +1,6 @@
 import abc
 from abc import abstractmethod, ABCMeta
+from collections.abc import Iterator
 
 import logging
 import os
@@ -31,11 +32,25 @@ class DataCollection(metaclass=ABCMeta):
                  *args,
                  identifier: str,
                  path: str = os.path.join(".", "data"),
+                 path_components: object = None,
                  **kwargs) -> None:
         self._identifier: str = identifier
-        self._path: str = os.path.join(path, identifier)
+
+        path_components = list() if path_components is None else path_components
+        assert not isinstance(path_components, Iterator), "path_components should be an Iterator"
+        self._path = os.path.join(path, identifier, *path_components)
 
         assert self._identifier, "No identifier supplied"
+
+        if os.path.exists(self._path):
+            logging.debug("{} already exists".format(self._path))
+        else:
+            if not os.path.islink(self._path):
+                logging.info("Creating path: {}".format(self._path))
+                os.makedirs(self._path, exist_ok=True)
+            else:
+                logging.info("Skipping creation for symlink: {}".format(
+                    self._path))
 
         self._config = Configuration(directory=self.base_path,
                                      identifier=self.identifier)
@@ -79,7 +94,9 @@ class DataSet(DataCollection):
                  overwrite: bool = False,
                  var_names: object = (),
                  **kwargs) -> None:
-        super(DataSet, self).__init__(*args, **kwargs)
+        super(DataSet, self).__init__(*args,
+                                      path_components=[frequency.value],
+                                      **kwargs)
 
         self._dry = dry
         self._frequency = frequency
@@ -87,16 +104,6 @@ class DataSet(DataCollection):
         self._location = location
         self._overwrite = overwrite
         self._var_names = list(var_names)
-
-        if os.path.exists(self._path):
-            logging.debug("{} already exists".format(self._path))
-        else:
-            if not os.path.islink(self._path):
-                logging.info("Creating path: {}".format(self._path))
-                os.makedirs(self._path, exist_ok=True)
-            else:
-                logging.info("Skipping creation for symlink: {}".format(
-                    self._path))
 
         assert len(self._var_names), "No variables requested"
         assert len(self._levels) == len(self._var_names), \
