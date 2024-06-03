@@ -38,18 +38,18 @@ class CMIP6DataSet(DataSet):
 
     MON_TABLE_MAP = {
         'siconca': 'SI{}',
-        'tas': 'A{}',
-        'ta': 'A{}',
+        'tas': '{}',
+        'ta': '{}',
         'tos': 'O{}',
-        'hus': 'A{}',
-        'psl': 'A{}',
-        'rlds': 'A{}',
-        'rsus': 'A{}',
-        'rsds': 'A{}',
-        'zg': 'A{}',
-        'uas': 'A{}',
-        'vas': 'A{}',
-        'ua': 'A{}'
+        'hus': '{}',
+        'psl': '{}',
+        'rlds': '{}',
+        'rsus': '{}',
+        'rsds': '{}',
+        'zg': '{}',
+        'uas': '{}',
+        'vas': '{}',
+        'ua': '{}'
     }
 
     GRID_MAP = {
@@ -60,8 +60,8 @@ class CMIP6DataSet(DataSet):
         'hus': 'gn',
         'psl': 'gn',
         'rlds': 'gn',
-        'rsus': 'gn',   # Surface Upwelling Shortwave Radiation
-        'rsds': 'gn',   # Surface Downwelling Shortwave Radiation
+        'rsus': 'gn',
+        'rsds': 'gn',
         'zg': 'gn',
         'uas': 'gn',
         'vas': 'gn',
@@ -156,7 +156,7 @@ class CMIP6Downloader(ThreadedDownloader):
                   "esgf-data.csc.fi",
                   "noresg.nird.sigma2.no",
                   #"esgf-data.ucar.edu",
-                  #"esgf-data2.diasjp.net",
+                  "esgf-data2.diasjp.net",
                   )
 
     def __init__(self,
