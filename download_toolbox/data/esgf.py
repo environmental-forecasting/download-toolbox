@@ -1,11 +1,14 @@
 import logging
 import os
+import requests
 import warnings
 
 import numpy as np
 import pandas as pd
 import xarray as xr
+
 from pyesgf.search import SearchConnection
+from pyesgf.logon import LogonManager
 
 from download_toolbox.base import DataSet, Downloader
 from download_toolbox.cli import download_args
@@ -124,7 +127,7 @@ class CMIP6DataSet(DataSet):
         return self._table_map
 
 
-class CMIP6Downloader(ThreadedDownloader):
+class CMIP6PyESGFDownloader(Downloader):
     """Climate downloader to provide CMIP6 reanalysis data from ESGF APIs
 
     Useful CMIP6 guidance: https://pcmdi.llnl.gov/CMIP6/Guide/dataUsers.html
@@ -145,32 +148,20 @@ class CMIP6Downloader(ThreadedDownloader):
 
     """
 
-    # Prioritise European first, US last, avoiding unnecessary queries
-    # against nodes further afield (all traffic has a cost, and the coverage
-    # of local nodes is more than enough)
-    ESGF_NODES = ("esgf.ceda.ac.uk",
-                  #"esg1.umr-cnrm.fr",
-                  #"vesg.ipsl.upmc.fr",
-                  #"esgf3.dkrz.de",
-                  "esgf.bsc.es",
-                  "esgf-data.csc.fi",
-                  "noresg.nird.sigma2.no",
-                  #"esgf-data.ucar.edu",
-                  "esgf-data2.diasjp.net",
-                  )
+    # HTTP 500 search_node: object = "https://esgf.ceda.ac.uk/esg-search"
 
     def __init__(self,
                  *args,
-                 nodes: object = None,
-                 exclude_nodes: object = None,
+                 search_node: object = "https://esgf-data.dkrz.de/esg-search",
                  **kwargs):
         super().__init__(*args, **kwargs)
 
-        exclude_nodes = list() if exclude_nodes is None else exclude_nodes
+        self._connection = None
+        self._search_node = search_node
 
-        self.__connection = None
-        self._nodes = nodes if nodes is not None else \
-            [n for n in CMIP6Downloader.ESGF_NODES if n not in exclude_nodes]
+        lm = LogonManager()
+        lm.logoff()
+        lm.is_logged_on()
 
     def _single_download(self,
                          var_config: object,
@@ -198,108 +189,227 @@ class CMIP6Downloader(ThreadedDownloader):
             'grid_label': self.dataset.grid_map[var],
         }
 
-        logging.info("Querying ESGF")
         results = []
-        self.__connection = SearchConnection("https://esgf-data.dkrz.de/esg-search", distrib=True)
+        self._connection = SearchConnection(self._search_node, distrib=True)
 
         for experiment_id in self.dataset.experiments:
+            logging.info("Querying ESGF for experiment {} for {}".format(experiment_id, var))
             query['experiment_id'] = experiment_id
+            ctx = self._connection.new_context(facets="variant_label,data_node", **query)
+            ds = ctx.search()[0]
+            results = ds.file_context().search()
 
+            if len(results) > 0:
+                logging.info("Found {} {} {} results from ESGF search".format(len(results), experiment_id, var))
+                results = [f.download_url for f in results]
+                break
+
+        if len(results) == 0:
+            logging.warning("NO RESULTS FOUND for {} from ESGF search".format(var))
+        else:
+            cmip6_da = None
+
+            logging.info("\n".join(results))
+
+            try:
+                # http://xarray.pydata.org/en/stable/user-guide/io.html?highlight=opendap#opendap
+                # Avoid 500MB DAP request limit
+                cmip6_da = xr.open_mfdataset(results,
+                                             combine='by_coords',
+                                             chunks={'time': '499MB'}
+                                             )[var]
+
+                cmip6_da = cmip6_da.sel(time=slice(req_dates[0],
+                                                   req_dates[-1]))
+
+                # TODO: possibly other attributes, especially with ocean vars
+                if level:
+                    cmip6_da = cmip6_da.sel(plev=int(level) * 100)
+
+                cmip6_da = cmip6_da.sel(lat=slice(self.dataset.location.bounds[2],
+                                                  self.dataset.location.bounds[0]))
+            except OSError as e:
+                logging.exception("Error encountered: {}".format(e),
+                                  exc_info=False)
+            else:
+                self.save_temporal_files(var_config, cmip6_da)
+                cmip6_da.close()
+
+        self._connection.close()
+
+
+class CMIP6LegacyDownloader(Downloader):
+    # Prioritise European first, US last, avoiding unnecessary queries
+    # against nodes further afield (all traffic has a cost, and the coverage
+    # of local nodes is more than enough)
+    ESGF_NODES = ("esgf.ceda.ac.uk",
+                  "esg1.umr-cnrm.fr",
+                  "vesg.ipsl.upmc.fr",
+                  "esgf3.dkrz.de",
+                  "esgf.bsc.es",
+                  "esgf-data.csc.fi",
+                  "noresg.nird.sigma2.no",
+                  "esgf-data.ucar.edu",
+                  "esgf-data2.diasjp.net")
+
+    def __init__(self,
+                 *args,
+                 nodes: object = None,
+                 exclude_nodes: object = None,
+                 search_node: object = "https://esgf-node.llnl.gov/esg-search/search",
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+        exclude_nodes = list() if exclude_nodes is None else exclude_nodes
+
+        self._search_node = search_node
+        self.__connection = None
+        self._nodes = nodes if nodes is not None else \
+            [n for n in CMIP6LegacyDownloader.ESGF_NODES if n not in exclude_nodes]
+
+    def _single_download(self,
+                         var_config: object,
+                         req_dates: object,
+                         download_path: object):
+        """Overridden CMIP implementation for downloading from DAP server
+
+        Due to the size of the CMIP set and the fact that we don't want to make
+        1850-2100 yearly requests for all downloads, we have a bespoke and
+        overridden download implementation for this.
+
+        :param var_prefix:
+        :param level:
+        :param req_dates:
+        """
+
+        var, level = var_config["prefix"], var_config["level"]
+
+        query = {
+            'source_id': self.dataset.source,
+            'member_id': self.dataset.member,
+            'frequency': self.dataset.frequency,
+            'variable_id': var,
+            'table_id': self.dataset.table_map[var],
+            'grid_label': self.dataset.grid_map[var],
+        }
+
+        results = []
+        self._connection = SearchConnection(self._search_node, distrib=True)
+
+        for experiment_id in self.dataset.experiments:
+            logging.info("Querying ESGF for experiment {} for {}".format(experiment_id, var))
+            query['experiment_id'] = experiment_id
             for data_node in self._nodes:
                 query['data_node'] = data_node
                 node_results = self.esgf_search(**query)
 
-                if node_results is not None and len(node_results):
+                if node_results is not None and len(node_results) > 0:
                     logging.debug("Query: {}".format(query))
-                    logging.debug("Found {}: {}".format(experiment_id,
-                                                        node_results))
+                    logging.debug("Found {}: {}".format(experiment_id, node_results))
                     results.extend(node_results)
                     break
 
-        logging.info("Found {} {} results from ESGF search".
-                     format(len(results), var))
+        if len(results) == 0:
+            logging.warning("NO RESULTS FOUND for {} from ESGF search".format(var))
+        else:
+            cmip6_da = None
 
-        cmip6_da = None
+            logging.info("\n".join(results))
 
-        try:
-            # http://xarray.pydata.org/en/stable/user-guide/io.html?highlight=opendap#opendap
-            # Avoid 500MB DAP request limit
-            cmip6_da = xr.open_mfdataset(results,
-                                         combine='by_coords',
-                                         chunks={'time': '499MB'}
-                                         )[var]
+            try:
+                # http://xarray.pydata.org/en/stable/user-guide/io.html?highlight=opendap#opendap
+                # Avoid 500MB DAP request limit
+                cmip6_da = xr.open_mfdataset(results,
+                                             combine='by_coords',
+                                             chunks={'time': '499MB'}
+                                             )[var]
 
-            cmip6_da = cmip6_da.sel(time=slice(req_dates[0],
-                                               req_dates[-1]))
+                cmip6_da = cmip6_da.sel(time=slice(req_dates[0],
+                                                   req_dates[-1]))
 
-            # TODO: possibly other attributes, especially with ocean vars
-            if level:
-                cmip6_da = cmip6_da.sel(plev=int(level) * 100)
+                # TODO: possibly other attributes, especially with ocean vars
+                if level:
+                    cmip6_da = cmip6_da.sel(plev=int(level) * 100)
 
-            cmip6_da = cmip6_da.sel(lat=slice(self.dataset.location.bounds[2],
-                                              self.dataset.location.bounds[0]))
-        except OSError as e:
-            logging.exception("Error encountered: {}".format(e),
-                              exc_info=False)
+                cmip6_da = cmip6_da.sel(lat=slice(self.dataset.location.bounds[2],
+                                                  self.dataset.location.bounds[0]))
+            except OSError as e:
+                logging.exception("Error encountered: {}".format(e),
+                                  exc_info=False)
+            else:
+                self.save_temporal_files(var_config, cmip6_da)
+                cmip6_da.close()
 
-        self.__connection.close()
-        self.save_temporal_files(var_config, cmip6_da)
-        cmip6_da.close()
-
-    def additional_regrid_processing(self,
-                                     datafile: str,
-                                     cube_ease: object):
+    def esgf_search(self,
+                    files_type: str = "OPENDAP",
+                    local_node: bool = False,
+                    latest: bool = True,
+                    project: str = "CMIP6",
+                    format: str = "application%2Fsolr%2Bjson",
+                    use_csrf: bool = False,
+                    **search):
         """
 
-        :param datafile:
-        :param cube_ease:
+        Below taken from
+        https://hub.binder.pangeo.io/user/pangeo-data-pan--cmip6-examples-ro965nih/lab
+        and adapted slightly
+
+        :param files_type:
+        :param local_node:
+        :param latest:
+        :param project:
+        :param format:
+        :param use_csrf:
+        :param search:
+        :return:
         """
-        (datafile_path, datafile_name) = os.path.split(datafile)
-        var_name = datafile_path.split(os.sep)[self._var_name_idx]
+        client = requests.session()
+        payload = search
+        payload["project"] = project
+        payload["type"] = "File"
+        if latest:
+            payload["latest"] = "true"
+        if local_node:
+            payload["distrib"] = "false"
+        if use_csrf:
+            client.get(self._search_node)
+            if 'csrftoken' in client.cookies:
+                # Django 1.6 and up
+                csrftoken = client.cookies['csrftoken']
+            else:
+                # older versions
+                csrftoken = client.cookies['csrf']
+            payload["csrfmiddlewaretoken"] = csrftoken
 
-        # TODO: regrid fixes need better implementations
-        if var_name == "siconca":
-            if self._source == 'MRI-ESM2-0':
-                cube_ease.data = cube_ease.data / 100.
-            cube_ease.data = cube_ease.data.data
-        elif var_name in ["tos", "hus1000"]:
-            cube_ease.data = cube_ease.data.data
+        payload["format"] = format
 
-        if cube_ease.data.dtype != np.float32:
-            logging.info("Regrid processing, data type not float: {}".
-                         format(cube_ease.data.dtype))
-            cube_ease.data = cube_ease.data.astype(np.float32)
+        offset = 0
+        numFound = 10000
+        all_files = []
+        files_type = files_type.upper()
+        while offset < numFound:
+            payload["offset"] = offset
+            url_keys = []
+            for k in payload:
+                url_keys += ["{}={}".format(k, payload[k])]
 
-    def convert_cube(self, cube: object) -> object:
-        """Converts Iris cube to be fit for CMIP regrid
+            url = "{}/?{}".format(self._search_node, "&".join(url_keys))
+            logging.debug("ESGF search URL: {}".format(url))
 
-        :param cube:   the cube requiring alteration
-        :return cube:   the altered cube
-        """
+            r = client.get(url)
+            r.raise_for_status()
+            resp = r.json()["response"]
+            numFound = int(resp["numFound"])
+            resp = resp["docs"]
+            offset += len(resp)
+            for d in resp:
+                for k in d:
+                    logging.debug("{}: {}".format(k, d[k]))
 
-        cs = self.sic_ease_cube.coord_system().ellipsoid
-
-        for coord in ['longitude', 'latitude']:
-            cube.coord(coord).coord_system = cs
-        return cube
-
-    def esgf_search(self, **query):
-        # search_server = "https://esgf-node.llnl.gov/esg-search/search"
-
-        query["project"] = "CMIP6"
-        ctx = self.__connection.new_context(facets="source", **query)
-
-        # facets=",".join([k for k in query]))
-
-        # query = dict(project="CMIP", source_id="EC-Earth3", member_id="r2i1p1f1",
-        # experiment_id="historical", variable="siconca", frequency="SIday", data_node="esgf.ceda.ac.uk")
-        logging.debug(query)
-
-        if ctx.hit_count > 0:
-            result = ctx.search()[0]
-            files = result.file_context().search()
-            return [file.opendap_url for file in files]
-        return None
+                for f in d["url"]:
+                    sp = f.split("|")
+                    if sp[-1] == files_type:
+                        all_files.append(sp[0].split(".html")[0])
+        return sorted(all_files)
 
 
 def main():
@@ -333,7 +443,7 @@ def main():
         frequency=getattr(DateRequest, args.frequency),
     )
 
-    downloader = CMIP6Downloader(
+    downloader = CMIP6PyESGFDownloader(
         dataset=dataset,
         start_date=args.start_date,
         end_date=args.end_date,
@@ -345,9 +455,3 @@ def main():
 
     logging.info("CMIP downloading: {} {}".format(args.source, args.member))
     downloader.download()
-"""
-    logging.info("CMIP regridding: {} {}".format(args.source, args.member))
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=UserWarning)
-        downloader.regrid()
-"""

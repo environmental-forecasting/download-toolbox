@@ -310,6 +310,7 @@ class Downloader(metaclass=abc.ABCMeta):
 
     @download_method.setter
     def download_method(self, method: callable):
+        logging.debug("Setting download_method to {}".format(method))
         self._download_method = method
 
     @property
