@@ -48,7 +48,7 @@ class ERA5DataSet(DataSet):
         return self._cdi_map
 
 
-class ERA5Downloader(Downloader):
+class ERA5Downloader(ThreadedDownloader):
     def __init__(self,
                  *args,
                  use_toolbox: bool = False,
