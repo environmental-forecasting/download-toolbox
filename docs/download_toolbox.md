@@ -4,6 +4,7 @@
 
 ```{toctree}
 
+download_toolbox.base
 download_toolbox.data
 download_toolbox.tests
 ```
