@@ -65,13 +65,13 @@ class ERA5Downloader(ThreadedDownloader):
         if use_toolbox:
             self.download_method = self._single_toolbox_download
 
-#        if self._max_threads > 10:
-#            logging.info("Upping connection limit for max_threads > 10")
-#            adapter = requests.adapters.HTTPAdapter(
-#                pool_connections=self._max_threads,
-#                pool_maxsize=self._max_threads
-#            )
-#            self.client.session.mount("https://", adapter)
+        if self._max_threads > 10:
+            logging.info("Upping connection limit for max_threads > 10")
+            adapter = requests.adapters.HTTPAdapter(
+                pool_connections=self._max_threads,
+                pool_maxsize=self._max_threads
+            )
+            self.client.session.mount("https://", adapter)
 
     def _single_toolbox_download(self,
                                  var_config: object,
@@ -86,8 +86,7 @@ class ERA5Downloader(ThreadedDownloader):
         """
 
         logging.debug("Processing {} dates".format(len(req_dates)))
-        var, level = var_config["prefix"], var_config["level"]
-        var_prefix = var[0:-(len(str(level)))] if level else var
+        var_prefix, level = var_config["prefix"], var_config["level"]
 
         params_dict = {
             "realm": "c3s",
@@ -129,7 +128,7 @@ class ERA5Downloader(ThreadedDownloader):
             params=params_dict)
 
         try:
-            logging.info("Downloading data for {}...".format(var))
+            logging.info("Downloading data for {}...".format(var_config["name"]))
             logging.debug("Result: {}".format(result))
 
             location = result[0]['location']
@@ -160,9 +159,8 @@ class ERA5Downloader(ThreadedDownloader):
         :param download_path:
         """
 
-        logging.debug("Processing {} dates".format(len(req_dates)))
-        var, level = var_config["prefix"], var_config["level"]
-        var_prefix = var[0:-(len(str(level)))] if level else var
+        logging.debug("Processing {} dates for {}".format(len(req_dates), var_config))
+        var_prefix, level = var_config["prefix"], var_config["level"]
 
         retrieve_dict = {
             # TODO: DAILY: "product_type": "reanalysis",
@@ -193,8 +191,7 @@ class ERA5Downloader(ThreadedDownloader):
             retrieve_dict["pressure_level"] = level
 
         try:
-            logging.info("Downloading data for {}...".format(var))
-            logging.debug("")
+            logging.info("Downloading data for {}...".format(var_config["name"]))
 
             self.client.retrieve(dataset, retrieve_dict, download_path)
             logging.info("Download completed: {}".format(download_path))
@@ -214,6 +211,7 @@ class ERA5Downloader(ThreadedDownloader):
 
 def main():
     args = download_args(choices=["cdsapi", "toolbox"],
+                         # TODO: frequency
                          workers=True)
 
     logging.info("ERA5 Data Downloading")
@@ -236,6 +234,8 @@ def main():
         start_date=args.start_date,
         end_date=args.end_date,
         delete_tempfiles=args.delete,
+
+        # TODO: this needs to be based on DateRequest
         requests_group_by="year",
         max_threads=args.workers,
         use_toolbox=args.choice == "toolbox"

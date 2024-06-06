@@ -20,6 +20,9 @@ from download_toolbox.utils import DaskWrapper
 var_remove_list = ["polar_stereographic", "land"]
 
 
+class AMSRDataSet(DataSet):
+    pass
+
 class AMSRDownloader(Downloader):
     """Downloads AMSR2 SIC data from 2012-present using HTTP.
 
@@ -87,17 +90,7 @@ class AMSRDownloader(Downloader):
 
 def main():
     args = download_args(var_specs=False,
-                         workers=True,
-                         extra_args=[
-                            (("-u", "--use-dask"),
-                             dict(action="store_true", default=False)),
-                            (("-c", "--sic-chunking-size"),
-                             dict(type=int, default=10)),
-                            (("-dt", "--dask-timeouts"),
-                             dict(type=int, default=120)),
-                            (("-dp", "--dask-port"),
-                             dict(type=int, default=8888))
-                         ])
+                         workers=True)
 
     logging.info("AMSR-SIC Data Downloading")
     sic = AMSRDownloader(
@@ -108,9 +101,4 @@ def main():
         north=args.hemisphere == "north",
         south=args.hemisphere == "south",
     )
-    if args.use_dask:
-        logging.warning("Attempting to use dask client for SIC processing")
-        dw = DaskWrapper(workers=args.workers)
-        dw.dask_process(method=sic.download)
-    else:
-        sic.download()
+    sic.download()

@@ -186,6 +186,8 @@ var_remove_list = ['time_bnds', 'raw_ice_conc_values', 'total_standard_error',
                    'status_flag', 'Lambert_Azimuthal_Grid']
 
 
+class SICDataSet(DataSet):
+
 class SICDownloader(Downloader):
     """Downloads OSI-SAF SIC data from 1979-present using FTP.
 
