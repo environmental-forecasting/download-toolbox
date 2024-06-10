@@ -276,9 +276,9 @@ class CMIP6LegacyDownloader(Downloader):
         1850-2100 yearly requests for all downloads, we have a bespoke and
         overridden download implementation for this.
 
-        :param var_prefix:
-        :param level:
+        :param var_config:
         :param req_dates:
+        :param download_path:
         """
 
         var, level = var_config["prefix"], var_config["level"]
@@ -313,7 +313,7 @@ class CMIP6LegacyDownloader(Downloader):
         else:
             cmip6_da = None
 
-            logging.info("\n".join(results))
+            logging.debug("\n".join(results))
 
             try:
                 # http://xarray.pydata.org/en/stable/user-guide/io.html?highlight=opendap#opendap
@@ -418,6 +418,7 @@ def main():
         extra_args=[
             (["--source"], dict(type=str, default="MRI-ESM2-0")),
             (["--member"], dict(type=str, default="r1i1p1f1")),
+            (["--pyesgf"], dict(default=False, action="store_true")),
             (("-xs", "--exclude-server"),
              dict(default=[], nargs="*")),
             (("-o", "--override"), dict(required=None, type=str)),
@@ -443,7 +444,8 @@ def main():
         frequency=getattr(DateRequest, args.frequency),
     )
 
-    downloader = CMIP6LegacyDownloader(
+    implementation = CMIP6LegacyDownloader if not args.pyesgf else CMIP6PyESGFDownloader
+    downloader = implementation(
         dataset=dataset,
         start_date=args.start_date,
         end_date=args.end_date,
