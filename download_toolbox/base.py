@@ -1,6 +1,11 @@
 import abc
 from abc import abstractmethod, ABCMeta
 from collections.abc import Iterator
+import fnmatch
+
+import ftplib
+from ftplib import FTP
+import requests
 
 import logging
 import os
@@ -138,6 +143,34 @@ class DataSet(DataCollection):
 
         return data_var_path
 
+    def filter_extant_data(self, var_config, dates):
+        raise RuntimeError("Not yet implemented, do not use")
+
+#         dt_arr = list(reversed(sorted(copy.copy(self._dates))))
+#
+#         # Filtering dates based on existing data
+#         filter_years = sorted(set([d.year for d in dt_arr]))
+#         extant_paths = [
+#             os.path.join(self.get_data_var_folder(var),
+#                          "{}.nc".format(filter_ds))
+#             for filter_ds in filter_years
+#         ]
+#         extant_paths = [df for df in extant_paths if os.path.exists(df)]
+#
+#         if len(extant_paths) > 0:
+#             extant_ds = xr.open_mfdataset(extant_paths)
+#             exclude_dates = pd.to_datetime(extant_ds.time.values)
+#             logging.info("Excluding {} dates already existing from {} dates "
+#                          "requested.".format(len(exclude_dates), len(dt_arr)))
+#
+#             dt_arr = sorted(list(set(dt_arr).difference(exclude_dates)))
+#             dt_arr.reverse()
+#
+#             # We won't hold onto an active dataset during network I/O
+#             extant_ds.close()
+#
+#         # End filtering
+
     def var_config(self, var_name, level=None):
         var_full_name = "{}{}".format(var_name,
                                       str(level) if level is not None else "")
@@ -175,8 +208,9 @@ class Downloader(metaclass=abc.ABCMeta):
 
     """
 
-    def __init__(self, *args,
+    def __init__(self,
                  dataset: DataSet,
+                 *args,
                  delete_tempfiles: bool = True,
                  download: bool = True,
                  drop_vars: list = None,
@@ -217,6 +251,10 @@ class Downloader(metaclass=abc.ABCMeta):
 
         """
         for var_config in self._ds.variables:
+            # TODO: we need to be filtering dates on DataSet in existence
+            #  with individual downloaders managing whether they "re-download"
+            #  dates = self.dataset.filter_extant_data(var_config, self.dates)
+
             for req_date_batch in batch_requested_dates(dates=self.dates, attribute=self.requests_group_by):
                 logging.info("Processing single download for {} with {} dates".
                              format(var_config["name"], len(req_date_batch)))
@@ -224,8 +262,9 @@ class Downloader(metaclass=abc.ABCMeta):
                     self.get_download_filenames(var_config["path"], req_date_batch[0])
                 self.download_method(var_config, req_date_batch, temporary_file)
 
-                if self._postprocess:
-                    self.postprocess(temporary_file, destination_file)
+                # TODO: save_temporal_files needs to merge data into existing files
+                #  if self._postprocess:
+                #      self.postprocess(temporary_file, destination_file)
 
     def get_download_filenames(self,
                                var_folder: str,
@@ -324,3 +363,84 @@ class Downloader(metaclass=abc.ABCMeta):
     @property
     def requests_group_by(self):
         return self._requests_group_by
+
+
+class FTPDownloader(Downloader):
+    def __init__(self,
+                 host: str,
+                 *args,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self._ftp = None
+        self._ftp_host = host
+        self._cache = dict()
+
+    def single_request(self,
+                       source_dir: object,
+                       source_filename: list,
+                       destination_path: object):
+        if self._ftp is None:
+            logging.info("FTP opening")
+            self._ftp = FTP(self._ftp_host)
+            self._ftp.login()
+
+        try:
+            logging.debug("Changing to {}".format(source_dir))
+            # self._ftp.cwd(source_dir)
+
+            if source_dir not in self._cache:
+                self._cache[source_dir] = self._ftp.nlst(source_dir)
+
+            ftp_files = [el for el in self._cache[source_dir] if el.endswith(source_filename)]
+            if not len(ftp_files):
+                logging.warning("File is not available: {}".
+                                format(source_filename))
+                return None
+        except ftplib.error_perm as e:
+            logging.warning("FTP error, possibly missing directory {}: {}".format(source_dir, e))
+            return None
+
+        logging.debug("Attempting to retrieve to {} from {}".format(destination_path, ftp_files[0]))
+        with open(destination_path, "wb") as fh:
+            self._ftp.retrbinary("RETR {}".format(ftp_files[0]), fh.write)
+
+
+class HTTPDownloader(Downloader):
+    def __init__(self,
+                 host: str,
+                 *args,
+                 source_base: object = None,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self._host = host
+        self._source_base = source_base
+
+    def single_request(self,
+                       source: object,
+                       destination_path: object,
+                       method: str = "get",
+                       request_options: dict = None):
+        request_options = dict() if request_options is None else request_options
+        source_url = "/".join([self._host, self._source_base, source])
+
+        try:
+            logging.debug("{}-ing {} with {}".format(method, source_url, request_options))
+            response = getattr(requests, method)(source_url, **request_options)
+        except requests.exceptions.RequestException as e:
+            logging.warning("HTTP error, possibly missing directory {}: {}".format(source_url, e))
+            return None
+
+        logging.debug("Attempting to output response content to {}".format(destination_path))
+        with open(destination_path, "wb") as fh:
+            fh.write(response.content)
+
+
+class DataSetError(RuntimeError):
+    pass
+
+
+class DownloaderError(RuntimeError):
+    pass
+

@@ -5,87 +5,105 @@ import gzip
 import logging
 import os
 
-from ftplib import FTP
-
 import datetime as dt
 import numpy as np
 import pandas as pd
 import xarray as xr
 
+from download_toolbox.base import DataSet, DataSetError, HTTPDownloader, DownloaderError
 from download_toolbox.cli import download_args
-from download_toolbox.base import Downloader
-from download_toolbox.utils import DaskWrapper
+from download_toolbox.download import ThreadedDownloader
+from download_toolbox.location import Location
+from download_toolbox.time import DateRequest
 
 
 var_remove_list = ["polar_stereographic", "land"]
 
 
+# TODO: move resolutions elsewhere
 class AMSRDataSet(DataSet):
-    pass
+    def __init__(self,
+                 *args,
+                 resolution=6.25,
+                 **kwargs):
+        # There are other resolutions available, this will need updating for more
+        # products, such as 1km AMSR+MODIS
+        if resolution not in (3.125, 6.25):
+            raise DataSetError("{} is not a valid resolution".format(resolution))
 
-class AMSRDownloader(Downloader):
-    """Downloads AMSR2 SIC data from 2012-present using HTTP.
+        self._resolution = resolution
+
+        super().__init__(*args,
+                         identifier="amsr2_{:1.3f}".format(resolution).replace(".", ""),
+                         var_names=["siconca"],
+                         levels=[None],
+                         **kwargs)
+
+    @property
+    def resolution(self):
+        return self._resolution
+
+
+class AMSRDownloader(HTTPDownloader):
+    """Downloads AMSR2 SIC data from 2012-present using FTP.
 
     The data can come from yearly zips, or individual files
 
-    We used to use the following for HTTP downloads:
-        - https://seaice.uni-bremen.de/data/amsr2/asi_daygrid_swath/
-        - n3125/ or n6250/ for lower or higher resolutions respectively
-    But now realise there's anonymous FTP with 3.125km NetCDFs for both hemis
-    provided by the University of Hamburg, how kind!
+    We use the following for FTP downloads:
+        - data.seaice.uni-bremen.de
 
-        {'CDI': 'Climate Data Interface version 1.6.5.1 '
-                '(http://code.zmaw.de/projects/cdi)',
-         'CDO': 'Climate Data Operators version 1.6.5.1 '
-                '(http://code.zmaw.de/projects/cdo)',
-         'Comment1': 'Scaled land mask value is 12500, NaN values are masked 11500',
-         'Comment2': 'After application of scale_factor (multiply with 0.01): land '
-                     'mask value is 125, NaN values are masked 115',
-         'Conventions': 'CF-1.4',
-         'algorithm': 'ASI v5',
-         'cite': 'Spreen, G., L. Kaleschke, G. Heygster, Sea Ice Remote Sensing Using '
-                 'AMSR-E 89 GHz Channels, J. Geophys. Res., 113, C02S03, '
-                 'doi:10.1029/2005JC003384, 2008.',
-         'contact': 'alexander.beitsch@zmaw.de',
-         'datasource': 'JAXA',
-         'description': 'gridded ASI AMSR2 sea ice concentration',
-         'geocorrection': 'none',
-         'grid': 'NSIDC polar stereographic with tangential plane at 70degN , see '
-                 'http://nsidc.org/data/polar_stereo/ps_grids.html',
-         'grid_resolution': '3.125 km',
-         'gridding_method': 'Nearest Neighbor, with Python package pyresample',
-         'hemisphere': 'South',
-         'history': 'Tue Nov 11 21:26:36 2014: cdo setdate,2014-11-10 '
-                    '-settime,12:00:00 '
-                    '/scratch/clisap/seaice/OWN_PRODUCTS/AMSR2_SIC_3125/2014/Ant_20141110_res3.125_pyres_temp.nc '
-                    '/scratch/clisap/seaice/OWN_PRODUCTS/AMSR2_SIC_3125/2014/Ant_20141110_res3.125_pyres.nc\n'
-                    'Created Tue Nov 11 21:26:35 2014',
-         'landmask_value': '12500',
-         'missing_value': '11500',
-         'netCDF_created_by': 'Alexander Beitsch, alexander.beitsch(at)zmaw.de',
-         'offset': '0',
-         'sensor': 'AMSR2',
-         'tiepoints': 'P0=47 K, P1=11.7 K',
-         'title': 'Daily averaged Arctic sea ice concentration derived from AMSR2 L1R '
-                  'brightness temperature measurements'}
-
-
-    :param chunk_size:
-    :param dates:
-    :param delete_tempfiles:
-    :param download:
-    :param dtype:
     """
     def __init__(self,
+                 dataset: AMSRDataSet,
                  *args,
+                 start_date: object,
                  **kwargs):
-        super().__init__(*args, identifier="amsr2_3125", **kwargs)
+        amsr2_start = dt.date(2012, 7, 2)
+
+        # TODO: Differing start date ranges for different products! Validate in dataset
+        # TODO: In fact, all date filtering against existing data should be done via DataSet
+        if start_date < amsr2_start:
+            raise DownloaderError("AMSR2 only exists past {}".format(amsr2_start))
+        self._hemi_str = "s" if dataset.location.south else "n"
+
+        super().__init__("https://data.seaice.uni-bremen.de",
+                         dataset,
+                         *args,
+                         source_base="amsr2/asi_daygrid_swath/{}{}/netcdf".format(
+                             self._hemi_str, "{:1.3f}".format(dataset.resolution).replace(".", "")),
+                         start_date=start_date,
+                         **kwargs)
 
     def _single_download(self,
                          var_config: object,
                          req_dates: object,
                          download_path: object):
-        raise NotImplementedError("_single_download needs an implementation")
+
+        if len(set([el.year for el in req_dates]).difference([req_dates[0].year])) > 0:
+            raise DownloaderError("Batches of dates must not exceed a year boundary for AMSR2")
+        year_dir = str(req_dates[0].year)
+
+        for file_date in req_dates:
+            date_str = file_date.strftime("%Y%m%d")
+
+            # amsr2/asi_daygrid_swath/s3125/netcdf/2017/asi-AMSR2-s3125-20170105-v5.4.nc
+            # amsr2/asi_daygrid_swath/n6250/netcdf/2022/asi-AMSR2-n6250-20220103-v5.4.nc
+
+            file_in_question = "{}/asi-AMSR2-{}{}-{}-v5.4.nc".\
+                               format(year_dir, self._hemi_str, "{:1.3f}".format(self.dataset.resolution).replace(".", ""), date_str)
+            destination_path = os.path.join(var_config["path"], file_in_question)
+
+            if not os.path.exists(os.path.dirname(destination_path)):
+                os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+
+            if not os.path.exists(destination_path):
+                try:
+                    logging.info("Downloading {}".format(destination_path))
+                    self.single_request(file_in_question, destination_path)
+                except DownloaderError as e:
+                    logging.warning("Failed to download {}: {}".format(destination_path, e))
+            else:
+                logging.debug("{} already exists".format(destination_path))
 
 
 def main():
@@ -93,12 +111,22 @@ def main():
                          workers=True)
 
     logging.info("AMSR-SIC Data Downloading")
-    sic = AMSRDownloader(
-        chunk_size=args.sic_chunking_size,
-        dates=[pd.to_datetime(date).date() for date in
-               pd.date_range(args.start_date, args.end_date, freq="D")],
-        delete_tempfiles=args.delete,
+    location = Location(
+        name="hemi.{}".format(args.hemisphere),
         north=args.hemisphere == "north",
         south=args.hemisphere == "south",
+    )
+
+    dataset = AMSRDataSet(
+        location=location,
+        # TODO: there is no frequency selection for raw data - aggregation is a
+        #  concern of the process-toolbox
+        frequency=getattr(DateRequest, args.frequency),
+    )
+
+    sic = AMSRDownloader(
+        dataset,
+        start_date=args.start_date,
+        end_date=args.end_date,
     )
     sic.download()

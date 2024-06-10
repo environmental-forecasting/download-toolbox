@@ -443,7 +443,7 @@ def main():
         frequency=getattr(DateRequest, args.frequency),
     )
 
-    downloader = CMIP6PyESGFDownloader(
+    downloader = CMIP6LegacyDownloader(
         dataset=dataset,
         start_date=args.start_date,
         end_date=args.end_date,

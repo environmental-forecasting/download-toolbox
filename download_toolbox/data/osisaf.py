@@ -1,13 +1,21 @@
 import datetime as dt
+import logging
+import os
 
-from download_toolbox.base import Downloader
+import pandas as pd
+
+from download_toolbox.base import DataSet, DownloaderError, FTPDownloader, DataSetError
+from download_toolbox.cli import download_args
+from download_toolbox.download import ThreadedDownloader
+from download_toolbox.location import Location
+from download_toolbox.time import DateRequest
 
 """
 
 """
 
 invalid_sic_days = {
-    Hemisphere.NORTH: [
+    "north": [
         *[d.date() for d in
           pd.date_range(dt.date(1979, 5, 21), dt.date(1979, 6, 4))],
         *[d.date() for d in
@@ -85,7 +93,7 @@ invalid_sic_days = {
         dt.date(1990, 1, 26),
         dt.date(2022, 11, 9),
     ],
-    Hemisphere.SOUTH: [
+    "south": [
         dt.date(1979, 2, 5),
         dt.date(1979, 2, 25),
         dt.date(1979, 3, 23),
@@ -187,59 +195,119 @@ var_remove_list = ['time_bnds', 'raw_ice_conc_values', 'total_standard_error',
 
 
 class SICDataSet(DataSet):
-
-class SICDownloader(Downloader):
-    """Downloads OSI-SAF SIC data from 1979-present using FTP.
-
-    The dataset comprises OSI-450 (1979-2015) and OSI-430-b (2016-ownards)
-    Monthly averages are-computed on the server-side.
-    This script can take about an hour to run.
-
-    The query URLs were obtained from the following sites:
-        - OSI-450 (1979-2016): https://thredds.met.no/thredds/dodsC/osisaf/
-            met.no/reprocessed/ice/conc_v2p0_nh_agg.html
-        - OSI-430-b (2016-present): https://thredds.met.no/thredds/dodsC/osisaf/
-            met.no/reprocessed/ice/conc_crb_nh_agg.html
-
-    """
     def __init__(self,
                  *args,
                  **kwargs):
-        super().__init__(*args, identifier="osisaf", **kwargs)
+
+        super().__init__(*args,
+                         identifier="osisaf",
+                         var_names=["siconca"],
+                         levels=[None],
+                         **kwargs)
+
+
+class SICDownloader(FTPDownloader):
+    """Downloads OSISAF SIC data from 2012-present using FTP.
+
+    The data can come from yearly zips, or individual files
+
+    We use the following for FTP downloads:
+        - data.seaice.uni-bremen.de
+
+    """
+    def __init__(self,
+                 dataset: SICDataSet,
+                 *args,
+                 start_date: object,
+                 **kwargs):
+        self._osi450_start = dt.date(1979, 1, 1)
+        self._osi430b_start = dt.date(2016, 1, 1)
+
+        # TODO: Differing start date ranges for different products! Validate in dataset
+        # TODO: In fact, all date filtering against existing data should be done via DataSet
+        if start_date < self._osi450_start:
+            raise DownloaderError("OSISAF SIC only exists past {}".format(self._osi450_start))
+
+        self._ftp_osi450 = "/reprocessed/ice/conc/v2p0/{:04d}/{:02d}/"
+        self._ftp_osi430b = "/reprocessed/ice/conc-cont-reproc/v2p0/{:04d}/{:02d}/"
+        ### v3p0 needs some inclusion? 2021 +
+        # self._ftp_osi430b = "/reprocessed/ice/conc-cont-reproc/v3p0/{:04d}/{:02d}/"
+        ### TODO: /reprocessed/ice/conc/v3p0/monthly/2020 - MONTHLIES
+        ###  /reprocessed/ice/conc-cont-reproc/v3p0/monthly/2023
+
+        self._version_str = "v2p0"
+        self._source_base = self._ftp_osi450 if start_date < self._osi430b_start else self._ftp_osi430b
+
+        if dataset.location.north:
+            self._invalid_dates = invalid_sic_days["north"]
+            self._hemi_str = "nh"
+        elif dataset.location.south:
+            self._invalid_dates = invalid_sic_days["south"]
+            self._hemi_str = "sh"
+        else:
+            # TODO: other locations are valid, there is work to do to support their "cutting out"
+            raise RuntimeError("Please only use this downloader with whole hemispheres")
+
+        super().__init__("osisaf.met.no",
+                         dataset,
+                         *args,
+                         start_date=start_date,
+                         **kwargs)
 
     def _single_download(self,
                          var_config: object,
                          req_dates: object,
                          download_path: object):
-        raise NotImplementedError("_single_download needs an implementation")
+
+        if len(set([el.year for el in req_dates]).difference([req_dates[0].year])) > 0:
+            raise DownloaderError("Individual batches of dates must not exceed a year boundary for AMSR2")
+
+        for file_date in req_dates:
+            self._source_base = self._ftp_osi450 if file_date < self._osi430b_start else self._ftp_osi430b
+            source_base = self._source_base.format(file_date.year, file_date.month)
+
+            file_in_question = "ice_conc_{}_ease2-250_icdr-{}_{:04d}{:02d}{:02d}1200.nc". \
+                format(self._hemi_str, self._version_str, file_date.year, file_date.month, file_date.day)
+
+            destination_path = os.path.join(var_config["path"], file_in_question)
+
+            if not os.path.exists(os.path.dirname(destination_path)):
+                os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+
+            if not os.path.exists(destination_path):
+                try:
+                    logging.info("Downloading {}".format(destination_path))
+                    self.single_request(source_base,
+                                        file_in_question,
+                                        destination_path)
+                except DownloaderError as e:
+                    logging.warning("Failed to download {}: {}".format(destination_path, e))
+            else:
+                logging.debug("{} already exists".format(destination_path))
 
 
 def main():
     args = download_args(var_specs=False,
-                         workers=True,
-                         extra_args=[
-                            (("-u", "--use-dask"),
-                             dict(action="store_true", default=False)),
-                            (("-c", "--sic-chunking-size"),
-                             dict(type=int, default=10)),
-                            (("-dt", "--dask-timeouts"),
-                             dict(type=int, default=120)),
-                            (("-dp", "--dask-port"),
-                             dict(type=int, default=8888))
-                         ])
+                         workers=True)
 
-    logging.info("OSASIF-SIC Data Downloading")
-    sic = SICDownloader(
-        chunk_size=args.sic_chunking_size,
-        dates=[pd.to_datetime(date).date() for date in
-               pd.date_range(args.start_date, args.end_date, freq="D")],
-        delete_tempfiles=args.delete,
+    logging.info("OSISAF-SIC Data Downloading")
+    location = Location(
+        name="hemi.{}".format(args.hemisphere),
         north=args.hemisphere == "north",
         south=args.hemisphere == "south",
     )
-    if args.use_dask:
-        logging.warning("Attempting to use dask client for SIC processing")
-        dw = DaskWrapper(workers=args.workers)
-        dw.dask_process(method=sic.download)
-    else:
-        sic.download()
+
+    dataset = SICDataSet(
+        location=location,
+        # TODO: there is no frequency selection for raw data - aggregation is a
+        #  concern of the process-toolbox
+        frequency=getattr(DateRequest, args.frequency),
+    )
+
+    sic = SICDownloader(
+        dataset,
+        start_date=args.start_date,
+        end_date=args.end_date,
+    )
+    sic.download()
+
