@@ -12,7 +12,7 @@ from download_toolbox.base import DataSet, Downloader
 from download_toolbox.cli import download_args
 from download_toolbox.download import ThreadedDownloader
 from download_toolbox.location import Location
-from download_toolbox.time import DateRequest
+from download_toolbox.time import Frequency
 
 
 class ERA5DataSet(DataSet):
@@ -86,7 +86,7 @@ class ERA5Downloader(ThreadedDownloader):
         """
 
         logging.debug("Processing {} dates".format(len(req_dates)))
-        var_prefix, level = var_config["prefix"], var_config["level"]
+        var_prefix, level = var_config.prefix, var_config.level
 
         params_dict = {
             "realm": "c3s",
@@ -128,7 +128,7 @@ class ERA5Downloader(ThreadedDownloader):
             params=params_dict)
 
         try:
-            logging.info("Downloading data for {}...".format(var_config["name"]))
+            logging.info("Downloading data for {}...".format(var_config.name))
             logging.debug("Result: {}".format(result))
 
             location = result[0]['location']
@@ -160,7 +160,7 @@ class ERA5Downloader(ThreadedDownloader):
         """
 
         logging.debug("Processing {} dates for {}".format(len(req_dates), var_config))
-        var_prefix, level = var_config["prefix"], var_config["level"]
+        var_prefix, level = var_config.prefix, var_config.level
 
         retrieve_dict = {
             # TODO: DAILY: "product_type": "reanalysis",
@@ -191,7 +191,7 @@ class ERA5Downloader(ThreadedDownloader):
             retrieve_dict["pressure_level"] = level
 
         try:
-            logging.info("Downloading data for {}...".format(var_config["name"]))
+            logging.info("Downloading data for {}...".format(var_config.name))
 
             self.client.retrieve(dataset, retrieve_dict, download_path)
             logging.info("Download completed: {}".format(download_path))
@@ -226,7 +226,7 @@ def main():
         levels=args.levels,
         location=location,
         var_names=args.vars,
-        frequency=getattr(DateRequest, args.frequency),
+        frequency=getattr(Frequency, args.frequency),
     )
 
     era5 = ERA5Downloader(
@@ -235,7 +235,7 @@ def main():
         end_date=args.end_date,
         delete_tempfiles=args.delete,
 
-        # TODO: this needs to be based on DateRequest
+        # TODO: this needs to be based on Frequency
         requests_group_by="year",
         max_threads=args.workers,
         use_toolbox=args.choice == "toolbox"

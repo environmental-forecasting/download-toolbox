@@ -14,7 +14,7 @@ from download_toolbox.base import DataSet, DataSetError, HTTPDownloader, Downloa
 from download_toolbox.cli import download_args
 from download_toolbox.download import ThreadedDownloader
 from download_toolbox.location import Location
-from download_toolbox.time import DateRequest
+from download_toolbox.time import Frequency
 
 
 var_remove_list = ["polar_stereographic", "land"]
@@ -91,7 +91,8 @@ class AMSRDownloader(HTTPDownloader):
 
             file_in_question = "{}/asi-AMSR2-{}{}-{}-v5.4.nc".\
                                format(year_dir, self._hemi_str, "{:1.3f}".format(self.dataset.resolution).replace(".", ""), date_str)
-            destination_path = os.path.join(var_config["path"], file_in_question)
+            destination_path = os.path.join(var_config.path
+                                            , file_in_question)
 
             if not os.path.exists(os.path.dirname(destination_path)):
                 os.makedirs(os.path.dirname(destination_path), exist_ok=True)
@@ -121,7 +122,7 @@ def main():
         location=location,
         # TODO: there is no frequency selection for raw data - aggregation is a
         #  concern of the process-toolbox
-        frequency=getattr(DateRequest, args.frequency),
+        frequency=getattr(Frequency, args.frequency),
     )
 
     sic = AMSRDownloader(

@@ -14,7 +14,7 @@ from download_toolbox.base import DataSet, Downloader
 from download_toolbox.cli import download_args
 from download_toolbox.download import ThreadedDownloader
 from download_toolbox.location import Location
-from download_toolbox.time import DateRequest
+from download_toolbox.time import Frequency
 
 """
 
@@ -178,7 +178,7 @@ class CMIP6PyESGFDownloader(Downloader):
         :param req_dates:
         """
 
-        var, level = var_config["prefix"], var_config["level"]
+        var, level = var_config.prefix, var_config.level
 
         query = {
             'source_id': self.dataset.source,
@@ -281,7 +281,7 @@ class CMIP6LegacyDownloader(Downloader):
         :param download_path:
         """
 
-        var, level = var_config["prefix"], var_config["level"]
+        var, level = var_config.prefix, var_config.level
 
         query = {
             'source_id': self.dataset.source,
@@ -441,7 +441,7 @@ def main():
         member=args.member,
         source=args.source,
         var_names=args.vars,
-        frequency=getattr(DateRequest, args.frequency),
+        frequency=getattr(Frequency, args.frequency),
     )
 
     implementation = CMIP6LegacyDownloader if not args.pyesgf else CMIP6PyESGFDownloader

@@ -1,21 +1,17 @@
 import abc
 from abc import abstractmethod, ABCMeta
-from collections.abc import Iterator
-import fnmatch
-
-import ftplib
-from ftplib import FTP
-import requests
+import collections
 
 import logging
 import os
 
 from download_toolbox.config import Configuration
 from download_toolbox.location import Location
-from download_toolbox.time import DateRequest
+from download_toolbox.time import Frequency
 from download_toolbox.data.utils import batch_requested_dates
 
 import pandas as pd
+import xarray as xr
 
 
 class DataCollection(metaclass=ABCMeta):
@@ -42,7 +38,8 @@ class DataCollection(metaclass=ABCMeta):
         self._identifier: str = identifier
 
         path_components = list() if path_components is None else path_components
-        assert not isinstance(path_components, Iterator), "path_components should be an Iterator"
+        if not isinstance(path_components, list):
+            raise RuntimeError("path_components should be an Iterator")
         self._path = os.path.join(path, identifier, *path_components)
 
         assert self._identifier, "No identifier supplied"
@@ -76,6 +73,11 @@ class DataCollection(metaclass=ABCMeta):
         return self._identifier
 
 
+class VarConfig(collections.namedtuple("VarConfig", ["name", "prefix", "level", "path"])):
+    def __repr__(self):
+        return "{} with path {}".format(self.name, self.path)
+
+
 class DataSet(DataCollection):
     """A dataset is an implementation of the base collection, adding characteristics.
 
@@ -93,26 +95,39 @@ class DataSet(DataCollection):
     def __init__(self,
                  *args,
                  dry: bool = False,
-                 frequency: object = DateRequest.day,
+                 frequency: object = Frequency.DAY,
                  levels: object = (),
                  location: object,
+                 output_group_by: object = Frequency.YEAR,
                  overwrite: bool = False,
+                 # TODO: Perhaps review the implementation with Enum to a bitwise typed one @ Py3.9+
+                 valid_frequencies: tuple = (Frequency.DAY, Frequency.MONTH),
                  var_names: object = (),
                  **kwargs) -> None:
         super(DataSet, self).__init__(*args,
-                                      path_components=[frequency.value],
+                                      path_components=[frequency.name.lower()],
                                       **kwargs)
 
         self._dry = dry
         self._frequency = frequency
         self._levels = list(levels)
         self._location = location
+        self._output_group_by = output_group_by
         self._overwrite = overwrite
         self._var_names = list(var_names)
 
-        assert len(self._var_names), "No variables requested"
-        assert len(self._levels) == len(self._var_names), \
-            "# of levels must match # vars"
+        if len(self._var_names) < 1:
+            raise DataSetError("No variables requested")
+
+        if len(self._levels) != len(self._var_names):
+            raise DataSetError("# of levels must match # vars")
+
+        if self._frequency < self._output_group_by:
+            raise DataSetError("You can't request a higher output frequency than request frequency: {} vs {}".
+                               format(self._output_group_by, self._frequency))
+
+        if self._frequency not in valid_frequencies:
+            raise DataSetError("Only the following frequencies are valid for request".format(valid_frequencies))
 
     def _get_data_var_folder(self,
                              var: str,
@@ -143,47 +158,52 @@ class DataSet(DataCollection):
 
         return data_var_path
 
-    def filter_extant_data(self, var_config, dates):
-        raise RuntimeError("Not yet implemented, do not use")
+    def filter_extant_data(self,
+                           var_config: VarConfig,
+                           dates: list) -> list:
+        dt_arr = list(reversed(sorted(dates)))
 
-#         dt_arr = list(reversed(sorted(copy.copy(self._dates))))
-#
-#         # Filtering dates based on existing data
-#         filter_years = sorted(set([d.year for d in dt_arr]))
-#         extant_paths = [
-#             os.path.join(self.get_data_var_folder(var),
-#                          "{}.nc".format(filter_ds))
-#             for filter_ds in filter_years
-#         ]
-#         extant_paths = [df for df in extant_paths if os.path.exists(df)]
-#
-#         if len(extant_paths) > 0:
-#             extant_ds = xr.open_mfdataset(extant_paths)
-#             exclude_dates = pd.to_datetime(extant_ds.time.values)
-#             logging.info("Excluding {} dates already existing from {} dates "
-#                          "requested.".format(len(exclude_dates), len(dt_arr)))
-#
-#             dt_arr = sorted(list(set(dt_arr).difference(exclude_dates)))
-#             dt_arr.reverse()
-#
-#             # We won't hold onto an active dataset during network I/O
-#             extant_ds.close()
-#
-#         # End filtering
+        # Filtering dates based on existing data
+        extant_paths = set([filepath
+                            for filepath in self.var_filepaths(var_config, dt_arr)
+                            if os.path.exists(filepath)])
+
+        if len(extant_paths) > 0:
+            extant_ds = xr.open_mfdataset(extant_paths)
+            exclude_dates = pd.to_datetime(extant_ds.time.values)
+            logging.info("Excluding {} dates already existing from {} dates "
+                         "requested.".format(len(exclude_dates), len(dt_arr)))
+
+            dt_arr = sorted(list(set(dt_arr).difference(exclude_dates)))
+            dt_arr.reverse()
+
+            # We won't hold onto an active dataset during network I/O
+            extant_ds.close()
+        return dt_arr
 
     def var_config(self, var_name, level=None):
         var_full_name = "{}{}".format(var_name,
                                       str(level) if level is not None else "")
-        return dict(
+
+        return VarConfig(
             name=var_full_name,
             prefix=var_name,
             level=level,
             path=self._get_data_var_folder(var_full_name)
         )
 
+    def var_filepaths(self,
+                      var_config: VarConfig,
+                      date_batch: list) -> set:
+        output_filepaths = set([
+            os.path.join(var_config.path, date.strftime(self._output_group_by.date_format))
+            for date in date_batch])
+        logging.debug("Got {} filenames".format(output_filepaths))
+        return output_filepaths
+
     @property
     def frequency(self):
-        return self._frequency.value
+        return self._frequency
 
     @property
     def location(self):
@@ -194,8 +214,7 @@ class DataSet(DataCollection):
         for var_name, levels in zip(self._var_names, self._levels):
             for level in levels if levels is not None else [None]:
                 var_config = self.var_config(var_name, level)
-                logging.debug("Returning configuration: {}".
-                              format(", ".join(var_config)))
+                logging.debug("Returning configuration: {}".format(var_config))
                 yield var_config
 
 
@@ -216,20 +235,18 @@ class Downloader(metaclass=abc.ABCMeta):
                  drop_vars: list = None,
                  end_date: object,
                  postprocess: bool = True,
-                 requests_group_by: str = "month",
+                 requests_group_by: object = Frequency.MONTH,
                  start_date: object,
                  **kwargs):
         super().__init__()
 
         # TODO: this needs to be moved into download_toolbox.time
         self._dates = [pd.to_datetime(date).date() for date in
-                       pd.date_range(start_date, end_date, freq="D")]
+                       pd.date_range(start_date, end_date, freq=dataset.frequency.freq)]
         self._delete = delete_tempfiles
         self._download = download
         self._drop_vars = list() if drop_vars is None else drop_vars
         self._files_downloaded = []
-        self._output_group_by = "year"
-        self._output_date_format = "%Y"
         self._postprocess = postprocess
         self._requests_group_by = requests_group_by
 
@@ -243,52 +260,30 @@ class Downloader(metaclass=abc.ABCMeta):
         self._download_method = self._single_download
 
     def download(self):
-        """Implements a single download based on configured download_method
+        """Implements a download for the given dataset
 
-        This allows delegation of downloading logic in a consistent manner to
-        the configured download_method, ensuring a guarantee of adherence to
-        naming and processing flow within implementations.
-
+        This method handles download per var-"date batch" for the dataset
         """
-        for var_config in self._ds.variables:
-            # TODO: we need to be filtering dates on DataSet in existence
-            #  with individual downloaders managing whether they "re-download"
-            #  dates = self.dataset.filter_extant_data(var_config, self.dates)
+        for var_config in self.dataset.variables:
+            dates = self.dataset.filter_extant_data(var_config, self.dates)
 
-            for req_date_batch in batch_requested_dates(dates=self.dates, attribute=self.requests_group_by):
-                logging.info("Processing single download for {} with {} dates".
-                             format(var_config["name"], len(req_date_batch)))
-                temporary_file, destination_file = \
-                    self.get_download_filenames(var_config["path"], req_date_batch[0])
-                self.download_method(var_config, req_date_batch, temporary_file)
+            for req_date_batch in batch_requested_dates(dates=dates, attribute=self.requests_group_by.attribute):
+                logging.info("Processing download for {} with {} dates".
+                             format(var_config.name, len(req_date_batch)))
+                destination_file = self.dataset.var_filepaths(var_config, req_date_batch)
 
-                # TODO: save_temporal_files needs to merge data into existing files
-                #  if self._postprocess:
-                #      self.postprocess(temporary_file, destination_file)
+                if len(destination_file) > 1:
+                    raise DownloaderError("The batch is too large for an individual file output: {}".
+                                          format(destination_file))
 
-    def get_download_filenames(self,
-                               var_folder: str,
-                               req_date: object,
-                               date_format: str = None):
-        """
+                files_downloaded = self._download_method(var_config, req_date_batch, destination_file)
+                logging.info("{} files downloaded".format(len(files_downloaded)))
+                self._files_downloaded.extend(files_downloaded)
 
-        :param var_folder:
-        :param req_date:
-        :param date_format:
-        :return:
-        """
-
-        filename_date = req_date.strftime(
-            date_format if date_format is not None else self._output_date_format)
-
-        preprocess_name = os.path.join(
-            var_folder, "temp.{}.nc".format(filename_date))
-        target_name = os.path.join(
-            var_folder, "{}.nc".format(filename_date))
-
-        logging.debug("Got filenames: {} and {}".format(preprocess_name, target_name))
-
-        return preprocess_name, target_name
+            # TODO: save_temporal_files needs to LOCK and merge data into existing files
+            #destination_file = self.dataset.var_filepath(var_config, self.dates)
+            #if self._postprocess:
+            #    self.postprocess(temporary_files, destination_file)
 
     def postprocess(self, source_filename, destination_filename):
         logging.debug("Calling default postprocessor to move {} to {}".format(
@@ -296,36 +291,11 @@ class Downloader(metaclass=abc.ABCMeta):
         ))
         os.rename(source_filename, destination_filename)
 
-    def save_temporal_files(self, var_config, da, date_format=None, freq=None):
-        """
-
-        :param var_config:
-        :param da:
-        :param date_format:
-        :param freq:
-        """
-
-        # TODO: Note, https://github.com/pydata/xarray/issues/364 for Grouper functionality?
-        #   - we might have to roll our own functionality in the meantime, if necessary
-        group_by = "time.{}".format(self.output_group_by) if not freq else freq
-
-        for dt, dt_da in da.groupby(group_by):
-            req_date = pd.to_datetime(dt_da.time.values[0])
-            temporary_name, _ = \
-                self.get_download_filenames(var_config["path"],
-                                            req_date,
-                                            date_format=date_format)
-
-            logging.info("Retrieving and saving {}".format(temporary_name))
-            dt_da.compute()
-            dt_da.to_netcdf(temporary_name)
-            self._files_downloaded.append(temporary_name)
-
     @abstractmethod
     def _single_download(self,
                          var_config: object,
                          req_dates: object,
-                         download_path: object):
+                         download_path: object) -> list:
         raise NotImplementedError("_single_download needs an implementation")
 
     @property
@@ -363,78 +333,6 @@ class Downloader(metaclass=abc.ABCMeta):
     @property
     def requests_group_by(self):
         return self._requests_group_by
-
-
-class FTPDownloader(Downloader):
-    def __init__(self,
-                 host: str,
-                 *args,
-                 **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self._ftp = None
-        self._ftp_host = host
-        self._cache = dict()
-
-    def single_request(self,
-                       source_dir: object,
-                       source_filename: list,
-                       destination_path: object):
-        if self._ftp is None:
-            logging.info("FTP opening")
-            self._ftp = FTP(self._ftp_host)
-            self._ftp.login()
-
-        try:
-            logging.debug("Changing to {}".format(source_dir))
-            # self._ftp.cwd(source_dir)
-
-            if source_dir not in self._cache:
-                self._cache[source_dir] = self._ftp.nlst(source_dir)
-
-            ftp_files = [el for el in self._cache[source_dir] if el.endswith(source_filename)]
-            if not len(ftp_files):
-                logging.warning("File is not available: {}".
-                                format(source_filename))
-                return None
-        except ftplib.error_perm as e:
-            logging.warning("FTP error, possibly missing directory {}: {}".format(source_dir, e))
-            return None
-
-        logging.debug("Attempting to retrieve to {} from {}".format(destination_path, ftp_files[0]))
-        with open(destination_path, "wb") as fh:
-            self._ftp.retrbinary("RETR {}".format(ftp_files[0]), fh.write)
-
-
-class HTTPDownloader(Downloader):
-    def __init__(self,
-                 host: str,
-                 *args,
-                 source_base: object = None,
-                 **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self._host = host
-        self._source_base = source_base
-
-    def single_request(self,
-                       source: object,
-                       destination_path: object,
-                       method: str = "get",
-                       request_options: dict = None):
-        request_options = dict() if request_options is None else request_options
-        source_url = "/".join([self._host, self._source_base, source])
-
-        try:
-            logging.debug("{}-ing {} with {}".format(method, source_url, request_options))
-            response = getattr(requests, method)(source_url, **request_options)
-        except requests.exceptions.RequestException as e:
-            logging.warning("HTTP error, possibly missing directory {}: {}".format(source_url, e))
-            return None
-
-        logging.debug("Attempting to output response content to {}".format(destination_path))
-        with open(destination_path, "wb") as fh:
-            fh.write(response.content)
 
 
 class DataSetError(RuntimeError):

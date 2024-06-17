@@ -6,7 +6,7 @@ import re
 
 import pandas as pd
 
-from download_toolbox.time import DateRequest
+from download_toolbox.time import Frequency
 from download_toolbox.utils import setup_logging
 
 """
@@ -120,7 +120,7 @@ def download_args(choices: object = None,
         ap.add_argument(*pos_args[1], type=date_arg, default=None)
 
     if frequency:
-        freq_avail = [_.name for _ in list(DateRequest)]
+        freq_avail = [_.name for _ in list(Frequency)]
         ap.add_argument("-f", "--frequency",
                         choices=freq_avail,
                         default=freq_avail[-1])

@@ -4,11 +4,11 @@ import os
 
 import pandas as pd
 
-from download_toolbox.base import DataSet, DownloaderError, FTPDownloader, DataSetError
+from download_toolbox.base import DataSet, DownloaderError, DataSetError
 from download_toolbox.cli import download_args
-from download_toolbox.download import ThreadedDownloader
+from download_toolbox.download import ThreadedDownloader, FTPClient
 from download_toolbox.location import Location
-from download_toolbox.time import DateRequest
+from download_toolbox.time import Frequency
 
 """
 
@@ -206,7 +206,7 @@ class SICDataSet(DataSet):
                          **kwargs)
 
 
-class SICDownloader(FTPDownloader):
+class SICDownloader(ThreadedDownloader):
     """Downloads OSISAF SIC data from 2012-present using FTP.
 
     The data can come from yearly zips, or individual files
@@ -220,23 +220,11 @@ class SICDownloader(FTPDownloader):
                  *args,
                  start_date: object,
                  **kwargs):
-        self._osi450_start = dt.date(1979, 1, 1)
-        self._osi430b_start = dt.date(2016, 1, 1)
+        self._conc_start = dt.date(1978, 10, 25)
+        self._reproc_start = dt.date(2021, 1, 1)
 
-        # TODO: Differing start date ranges for different products! Validate in dataset
-        # TODO: In fact, all date filtering against existing data should be done via DataSet
-        if start_date < self._osi450_start:
-            raise DownloaderError("OSISAF SIC only exists past {}".format(self._osi450_start))
-
-        self._ftp_osi450 = "/reprocessed/ice/conc/v2p0/{:04d}/{:02d}/"
-        self._ftp_osi430b = "/reprocessed/ice/conc-cont-reproc/v2p0/{:04d}/{:02d}/"
-        ### v3p0 needs some inclusion? 2021 +
-        # self._ftp_osi430b = "/reprocessed/ice/conc-cont-reproc/v3p0/{:04d}/{:02d}/"
-        ### TODO: /reprocessed/ice/conc/v3p0/monthly/2020 - MONTHLIES
-        ###  /reprocessed/ice/conc-cont-reproc/v3p0/monthly/2023
-
-        self._version_str = "v2p0"
-        self._source_base = self._ftp_osi450 if start_date < self._osi430b_start else self._ftp_osi430b
+        if start_date < self._conc_start:
+            raise DownloaderError("OSISAF SIC only exists past {}".format(self._conc_start))
 
         if dataset.location.north:
             self._invalid_dates = invalid_sic_days["north"]
@@ -248,28 +236,50 @@ class SICDownloader(FTPDownloader):
             # TODO: other locations are valid, there is work to do to support their "cutting out"
             raise RuntimeError("Please only use this downloader with whole hemispheres")
 
-        super().__init__("osisaf.met.no",
-                         dataset,
+        self._ftp_client = FTPClient(host="osisaf.met.no")
+
+        super().__init__(dataset,
                          *args,
+                         additional_thread_args=[self._ftp_client],
                          start_date=start_date,
                          **kwargs)
 
     def _single_download(self,
                          var_config: object,
                          req_dates: object,
-                         download_path: object):
+                         download_path: object) -> list:
 
         if len(set([el.year for el in req_dates]).difference([req_dates[0].year])) > 0:
             raise DownloaderError("Individual batches of dates must not exceed a year boundary for AMSR2")
 
+        downloaded_files = []
+
         for file_date in req_dates:
-            self._source_base = self._ftp_osi450 if file_date < self._osi430b_start else self._ftp_osi430b
-            source_base = self._source_base.format(file_date.year, file_date.month)
+            monthly_file = self.dataset.frequency < Frequency.DAY
 
-            file_in_question = "ice_conc_{}_ease2-250_icdr-{}_{:04d}{:02d}{:02d}1200.nc". \
-                format(self._hemi_str, self._version_str, file_date.year, file_date.month, file_date.day)
+            if not monthly_file:
+                version_str = "v3p0"
+                freq_path_str = "{:04d}/{:02d}"
+            else:
+                version_str = "v3p0/monthly"
+                freq_path_str = "{:04d}"
 
-            destination_path = os.path.join(var_config["path"], file_in_question)
+            ftp_conc = "/reprocessed/ice/conc/{}/{}/".format(version_str, freq_path_str)
+            ftp_reproc = "/reprocessed/ice/conc-cont-reproc/{}/{}/".format(version_str, freq_path_str)
+
+            source_base = ftp_conc if file_date < self._reproc_start else ftp_reproc
+            source_base = source_base.format(file_date.year, file_date.month)
+
+            if monthly_file:
+                source_base = source_base.format(file_date.year)
+                file_in_question = "ice_conc_{}_ease2-250_icdr-v3p0_{:04d}{:02d}.nc". \
+                    format(self._hemi_str, file_date.year, file_date.month)
+            else:
+                source_base = source_base.format(file_date.year, file_date.month)
+                file_in_question = "ice_conc_{}_ease2-250_icdr-v3p0_{:04d}{:02d}{:02d}1200.nc". \
+                    format(self._hemi_str, file_date.year, file_date.month, file_date.day)
+
+            destination_path = os.path.join(var_config.path, file_in_question)
 
             if not os.path.exists(os.path.dirname(destination_path)):
                 os.makedirs(os.path.dirname(destination_path), exist_ok=True)
@@ -277,17 +287,22 @@ class SICDownloader(FTPDownloader):
             if not os.path.exists(destination_path):
                 try:
                     logging.info("Downloading {}".format(destination_path))
-                    self.single_request(source_base,
-                                        file_in_question,
-                                        destination_path)
+                    self._ftp_client.single_request(source_base,
+                                                    file_in_question,
+                                                    destination_path)
+                    downloaded_files.append(destination_path)
                 except DownloaderError as e:
                     logging.warning("Failed to download {}: {}".format(destination_path, e))
             else:
                 logging.debug("{} already exists".format(destination_path))
+                downloaded_files.append(destination_path)
+
+        return downloaded_files
 
 
 def main():
-    args = download_args(var_specs=False,
+    args = download_args(frequency=True,
+                         var_specs=False,
                          workers=True)
 
     logging.info("OSISAF-SIC Data Downloading")
@@ -299,13 +314,13 @@ def main():
 
     dataset = SICDataSet(
         location=location,
-        # TODO: there is no frequency selection for raw data - aggregation is a
-        #  concern of the process-toolbox
-        frequency=getattr(DateRequest, args.frequency),
+        frequency=getattr(Frequency, args.frequency),
+        output_group_by=Frequency.MONTH,
     )
 
     sic = SICDownloader(
         dataset,
+        max_threads=args.workers,
         start_date=args.start_date,
         end_date=args.end_date,
     )
