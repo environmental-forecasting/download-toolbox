@@ -40,10 +40,12 @@ class DataCollection(metaclass=ABCMeta):
 
         path_components = list() if path_components is None else path_components
         if not isinstance(path_components, list):
-            raise RuntimeError("path_components should be an Iterator")
+            raise DataCollectionError("path_components should be an Iterator")
         self._path = os.path.join(path, identifier, *path_components)
+        self._root_path = os.path.join(path, identifier)
 
-        assert self._identifier, "No identifier supplied"
+        if self._identifier is None:
+            raise DataCollectionError("No identifier supplied")
 
         if os.path.exists(self._path):
             logging.debug("{} already exists".format(self._path))
@@ -77,6 +79,10 @@ class DataCollection(metaclass=ABCMeta):
         logging.info("Opening dataset config {}".format(config))
         raise RuntimeError("This is not yet implemented, get working for preprocess-toolbox!")
 
+    @property
+    def root_path(self):
+        return self._root_path
+
     def save_config(self):
         saved_config = self._config.render(self)
         logging.info("Saved dataset config {}".format(saved_config))
@@ -87,7 +93,7 @@ class DataCollection(metaclass=ABCMeta):
         return self._identifier
 
 
-class VarConfig(collections.namedtuple("VarConfig", ["name", "prefix", "level", "path"])):
+class VarConfig(collections.namedtuple("VarConfig", ["name", "prefix", "level", "path", "root_path"])):
     def __repr__(self):
         return "{} with path {}".format(self.name, self.path)
 
@@ -120,7 +126,7 @@ class DatasetConfig(DataCollection):
                  var_names: object = (),
                  **kwargs) -> None:
         super(DatasetConfig, self).__init__(*args,
-                                            path_components=[frequency.name.lower()],
+                                            path_components=[frequency.name.lower(), location.name],
                                             **kwargs)
 
         self._frequency = frequency
@@ -145,6 +151,7 @@ class DatasetConfig(DataCollection):
 
     def _get_data_var_folder(self,
                              var: str,
+                             root: bool = False,
                              append: object = None,
                              missing_error: bool = False) -> str:
         """Returns the path for a specific data variable.
@@ -159,7 +166,7 @@ class DatasetConfig(DataCollection):
         if not append:
             append = []
 
-        data_var_path = os.path.join(self.base_path,
+        data_var_path = os.path.join(self.base_path if not root else self.root_path,
                                      *[var, *append])
         logging.debug("Handling data var path: {}".format(data_var_path))
 
@@ -199,6 +206,7 @@ class DatasetConfig(DataCollection):
                              rename_var_list: dict = None,
                              source_ds: object = None,
                              source_files: list = None,
+                             time_dim_values: list = None,
                              var_filter_list: list = None):
         # Check whether we have a valid source
         ds = None
@@ -208,7 +216,12 @@ class DatasetConfig(DataCollection):
             if source_files is not None:
                 raise RuntimeError("Not able to combine sources in save_dataset at present")
         elif source_files is not None and len(source_files) > 0:
-            ds = xr.open_mfdataset(source_files)
+            ds = xr.open_mfdataset(source_files,
+                                   concat_dim="time",
+                                   combine="nested")
+            if time_dim_values is not None:
+                logging.warning("Assigning time dimension with {} values".format(len(time_dim_values)))
+                ds = ds.assign(dict(time=[pd.Timestamp(d) for d in time_dim_values]))
 
         # Strip out unnecessary / unwanted variables
         if var_filter_list is not None:
@@ -272,7 +285,8 @@ class DatasetConfig(DataCollection):
             name=var_full_name,
             prefix=var_name,
             level=level,
-            path=self._get_data_var_folder(var_full_name)
+            path=self._get_data_var_folder(var_full_name),
+            root_path=self._get_data_var_folder(var_full_name, root=True)
         )
 
     def var_filepath(self, *args, **kwargs) -> os.PathLike:
@@ -418,6 +432,10 @@ class Downloader(metaclass=abc.ABCMeta):
     @property
     def requests_group_by(self):
         return self._requests_group_by
+
+
+class DataCollectionError(RuntimeError):
+    pass
 
 
 class DataSetError(RuntimeError):

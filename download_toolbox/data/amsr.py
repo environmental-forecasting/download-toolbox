@@ -80,14 +80,11 @@ class AMSRDownloader(ThreadedDownloader):
         for file_date in req_dates:
             date_str = file_date.strftime("%Y%m%d")
 
-            # amsr2/asi_daygrid_swath/s3125/netcdf/2017/asi-AMSR2-s3125-20170105-v5.4.nc
-            # amsr2/asi_daygrid_swath/n6250/netcdf/2022/asi-AMSR2-n6250-20220103-v5.4.nc
-
             file_in_question = "{}/asi-AMSR2-{}{}-{}-v5.4.nc".\
                                format(year_dir, self._hemi_str, "{:1.3f}".
                                       format(self.dataset.resolution).
                                       replace(".", ""), date_str)
-            destination_path = os.path.join(var_config.path, file_in_question)
+            destination_path = os.path.join(var_config.root_path, file_in_question)
 
             if not os.path.exists(os.path.dirname(destination_path)):
                 os.makedirs(os.path.dirname(destination_path), exist_ok=True)
@@ -101,6 +98,7 @@ class AMSRDownloader(ThreadedDownloader):
                     logging.warning("Failed to download {}: {}".format(destination_path, e))
             else:
                 logging.debug("{} already exists".format(destination_path))
+                files_downloaded.append(destination_path)
 
         return files_downloaded
 
@@ -135,8 +133,9 @@ def main():
         end_date=args.end_date,
     )
     sic.download()
-    #dataset.save_data_for_config(
-    #    rename_var_list=dict(z="siconca"),
-    #    source_files=sic.files_downloaded,
-    #    var_filter_list=var_remove_list
-    #)
+    dataset.save_data_for_config(
+        rename_var_list=dict(z="siconca"),
+        source_files=sic.files_downloaded,
+        time_dim_values=sic.dates,
+        var_filter_list=var_remove_list
+    )

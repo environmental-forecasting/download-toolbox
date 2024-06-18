@@ -280,7 +280,7 @@ class SICDownloader(ThreadedDownloader):
                 file_in_question = "ice_conc_{}_ease2-250_icdr-v3p0_{:04d}{:02d}{:02d}1200.nc". \
                     format(self._hemi_str, file_date.year, file_date.month, file_date.day)
 
-            destination_path = os.path.join(var_config.path, dest_base, file_in_question)
+            destination_path = os.path.join(var_config.root_path, dest_base, file_in_question)
 
             if not os.path.exists(os.path.dirname(destination_path)):
                 os.makedirs(os.path.dirname(destination_path), exist_ok=True)
