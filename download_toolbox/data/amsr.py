@@ -1,18 +1,11 @@
-import copy
-import fnmatch
-import ftplib
-import gzip
 import logging
 import os
 
 import datetime as dt
-import numpy as np
-import pandas as pd
-import xarray as xr
 
-from download_toolbox.base import DatasetConfig, DataSetError, HTTPDownloader, DownloaderError
+from download_toolbox.base import DatasetConfig, DataSetError, DownloaderError
 from download_toolbox.cli import download_args
-from download_toolbox.download import ThreadedDownloader
+from download_toolbox.download import ThreadedDownloader, HTTPClient
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
 
@@ -44,13 +37,14 @@ class AMSRDatasetConfig(DatasetConfig):
         return self._resolution
 
 
-class AMSRDownloader(HTTPDownloader):
-    """Downloads AMSR2 SIC data from 2012-present using FTP.
+class AMSRDownloader(ThreadedDownloader):
+    """Downloads AMSR2 SIC data from 2012-present using HTTPS.
 
-    The data can come from yearly zips, or individual files
+    The data can come from yearly zips, or individual files. We target the individual files as in reality it's so much
+    more sensible - the zips are not consistently avialable across the data ranges
 
-    We use the following for FTP downloads:
-        - data.seaice.uni-bremen.de
+    We use the following for HTTPS downloads:
+        - https://data.seaice.uni-bremen.de
 
     """
     def __init__(self,
@@ -61,26 +55,26 @@ class AMSRDownloader(HTTPDownloader):
         amsr2_start = dt.date(2012, 7, 2)
 
         # TODO: Differing start date ranges for different products! Validate in dataset
-        # TODO: In fact, all date filtering against existing data should be done via DatasetConfig
         if start_date < amsr2_start:
             raise DownloaderError("AMSR2 only exists past {}".format(amsr2_start))
         self._hemi_str = "s" if dataset.location.south else "n"
+        self._http_client = HTTPClient("https://data.seaice.uni-bremen.de",
+                                       source_base="amsr2/asi_daygrid_swath/{}{}/netcdf".format(
+                                           self._hemi_str, "{:1.3f}".format(dataset.resolution).replace(".", "")))
 
-        super().__init__("https://data.seaice.uni-bremen.de",
-                         dataset,
+        super().__init__(dataset,
                          *args,
-                         source_base="amsr2/asi_daygrid_swath/{}{}/netcdf".format(
-                             self._hemi_str, "{:1.3f}".format(dataset.resolution).replace(".", "")),
                          start_date=start_date,
                          **kwargs)
 
     def _single_download(self,
                          var_config: object,
-                         req_dates: object,
-                         download_path: object):
+                         req_dates: object):
 
         if len(set([el.year for el in req_dates]).difference([req_dates[0].year])) > 0:
             raise DownloaderError("Batches of dates must not exceed a year boundary for AMSR2")
+
+        files_downloaded = []
         year_dir = str(req_dates[0].year)
 
         for file_date in req_dates:
@@ -90,9 +84,10 @@ class AMSRDownloader(HTTPDownloader):
             # amsr2/asi_daygrid_swath/n6250/netcdf/2022/asi-AMSR2-n6250-20220103-v5.4.nc
 
             file_in_question = "{}/asi-AMSR2-{}{}-{}-v5.4.nc".\
-                               format(year_dir, self._hemi_str, "{:1.3f}".format(self.dataset.resolution).replace(".", ""), date_str)
-            destination_path = os.path.join(var_config.path
-                                            , file_in_question)
+                               format(year_dir, self._hemi_str, "{:1.3f}".
+                                      format(self.dataset.resolution).
+                                      replace(".", ""), date_str)
+            destination_path = os.path.join(var_config.path, file_in_question)
 
             if not os.path.exists(os.path.dirname(destination_path)):
                 os.makedirs(os.path.dirname(destination_path), exist_ok=True)
@@ -100,16 +95,25 @@ class AMSRDownloader(HTTPDownloader):
             if not os.path.exists(destination_path):
                 try:
                     logging.info("Downloading {}".format(destination_path))
-                    self.single_request(file_in_question, destination_path)
+                    self._http_client.single_request(file_in_question, destination_path)
+                    files_downloaded.append(destination_path)
                 except DownloaderError as e:
                     logging.warning("Failed to download {}: {}".format(destination_path, e))
             else:
                 logging.debug("{} already exists".format(destination_path))
 
+        return files_downloaded
+
 
 def main():
     args = download_args(var_specs=False,
-                         workers=True)
+                         workers=True,
+                         extra_args=[
+                             (["-r", "--resolution"], dict(
+                                 type=float,
+                                 choices=[3.125, 6.25],
+                                 default=6.25
+                             ))])
 
     logging.info("AMSR-SIC Data Downloading")
     location = Location(
@@ -120,14 +124,19 @@ def main():
 
     dataset = AMSRDatasetConfig(
         location=location,
-        # TODO: there is no frequency selection for raw data - aggregation is a
-        #  concern of the process-toolbox
         frequency=getattr(Frequency, args.frequency),
+        output_group_by=getattr(Frequency, args.output_group_by),
     )
 
     sic = AMSRDownloader(
         dataset,
+        max_threads=args.workers,
         start_date=args.start_date,
         end_date=args.end_date,
     )
     sic.download()
+    #dataset.save_data_for_config(
+    #    rename_var_list=dict(z="siconca"),
+    #    source_files=sic.files_downloaded,
+    #    var_filter_list=var_remove_list
+    #)

@@ -101,6 +101,7 @@ def download_args(choices: object = None,
     :param choices:
     :param dates:
     :param dates_optional:
+    :param frequency:
     :param var_specs:
     :param workers:
     :param extra_args:
@@ -119,14 +120,16 @@ def download_args(choices: object = None,
         ap.add_argument(*pos_args[0], type=date_arg, default=None)
         ap.add_argument(*pos_args[1], type=date_arg, default=None)
 
+    freq_avail = [_.name for _ in list(Frequency)]
+
     if frequency:
-        freq_avail = [_.name for _ in list(Frequency)]
         ap.add_argument("-f", "--frequency",
                         choices=freq_avail,
                         default=freq_avail[-1])
-        ap.add_argument("-o", "--output-group-by",
-                        choices=freq_avail,
-                        default=freq_avail[0])
+
+    ap.add_argument("-o", "--output-group-by",
+                    choices=freq_avail,
+                    default=freq_avail[0])
 
     if workers:
         ap.add_argument("-w", "--workers", default=8, type=int)

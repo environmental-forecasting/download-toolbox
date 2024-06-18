@@ -302,8 +302,7 @@ class SICDownloader(ThreadedDownloader):
 
 
 def main():
-    args = download_args(frequency=True,
-                         var_specs=False,
+    args = download_args(var_specs=False,
                          workers=True)
 
     logging.info("OSISAF-SIC Data Downloading")
