@@ -6,7 +6,7 @@ from enum import Enum, auto
 class Frequency(int, Enum):
     YEAR = 1, "%Y", "Y", "year"
     MONTH = 2, "%Y%m", "M", "month"
-    DAY = 3, "%Y%m%d", "D", "day"
+    DAY = 3, "%Y%m%d", "D", "date"
 
     def __new__(cls, value, date_format, freq, attribute):
         member = int.__new__(cls, value)

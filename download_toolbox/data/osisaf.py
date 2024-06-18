@@ -4,7 +4,7 @@ import os
 
 import pandas as pd
 
-from download_toolbox.base import DataSet, DownloaderError, DataSetError
+from download_toolbox.base import DatasetConfig, DownloaderError
 from download_toolbox.cli import download_args
 from download_toolbox.download import ThreadedDownloader, FTPClient
 from download_toolbox.location import Location
@@ -194,7 +194,7 @@ var_remove_list = ['time_bnds', 'raw_ice_conc_values', 'total_standard_error',
                    'status_flag', 'Lambert_Azimuthal_Grid']
 
 
-class SICDataSet(DataSet):
+class SICDatasetConfig(DatasetConfig):
     def __init__(self,
                  *args,
                  **kwargs):
@@ -207,16 +207,17 @@ class SICDataSet(DataSet):
 
 
 class SICDownloader(ThreadedDownloader):
-    """Downloads OSISAF SIC data from 2012-present using FTP.
+    """Downloads OSISAF SIC data from 1978-present using FTP.
 
-    The data can come from yearly zips, or individual files
+    The data comes from individual files, daily or monthly, for this product:
+    https://osi-saf.eumetsat.int/products/osi-450-a
 
     We use the following for FTP downloads:
-        - data.seaice.uni-bremen.de
+        - osisaf.met.no
 
     """
     def __init__(self,
-                 dataset: SICDataSet,
+                 dataset: SICDatasetConfig,
                  *args,
                  start_date: object,
                  **kwargs):
@@ -234,20 +235,18 @@ class SICDownloader(ThreadedDownloader):
             self._hemi_str = "sh"
         else:
             # TODO: other locations are valid, there is work to do to support their "cutting out"
-            raise RuntimeError("Please only use this downloader with whole hemispheres")
+            raise RuntimeError("Please only use this downloader with whole hemispheres, for the mo")
 
         self._ftp_client = FTPClient(host="osisaf.met.no")
 
         super().__init__(dataset,
                          *args,
-                         additional_thread_args=[self._ftp_client],
                          start_date=start_date,
                          **kwargs)
 
     def _single_download(self,
                          var_config: object,
-                         req_dates: object,
-                         download_path: object) -> list:
+                         req_dates: object) -> list:
 
         if len(set([el.year for el in req_dates]).difference([req_dates[0].year])) > 0:
             raise DownloaderError("Individual batches of dates must not exceed a year boundary for AMSR2")
@@ -272,14 +271,16 @@ class SICDownloader(ThreadedDownloader):
 
             if monthly_file:
                 source_base = source_base.format(file_date.year)
+                dest_base = freq_path_str.format(file_date.year)
                 file_in_question = "ice_conc_{}_ease2-250_icdr-v3p0_{:04d}{:02d}.nc". \
                     format(self._hemi_str, file_date.year, file_date.month)
             else:
                 source_base = source_base.format(file_date.year, file_date.month)
+                dest_base = freq_path_str.format(file_date.year, file_date.month)
                 file_in_question = "ice_conc_{}_ease2-250_icdr-v3p0_{:04d}{:02d}{:02d}1200.nc". \
                     format(self._hemi_str, file_date.year, file_date.month, file_date.day)
 
-            destination_path = os.path.join(var_config.path, file_in_question)
+            destination_path = os.path.join(var_config.path, dest_base, file_in_question)
 
             if not os.path.exists(os.path.dirname(destination_path)):
                 os.makedirs(os.path.dirname(destination_path), exist_ok=True)
@@ -312,10 +313,10 @@ def main():
         south=args.hemisphere == "south",
     )
 
-    dataset = SICDataSet(
+    dataset = SICDatasetConfig(
         location=location,
         frequency=getattr(Frequency, args.frequency),
-        output_group_by=Frequency.MONTH,
+        output_group_by=getattr(Frequency, args.output_group_by),
     )
 
     sic = SICDownloader(
@@ -325,4 +326,9 @@ def main():
         end_date=args.end_date,
     )
     sic.download()
+    dataset.save_data_for_config(
+        rename_var_list=dict(ice_conc="siconca"),
+        source_files=sic.files_downloaded,
+        var_filter_list=var_remove_list
+    )
 

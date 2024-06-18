@@ -8,14 +8,14 @@ from pprint import pformat
 
 import cdsapi as cds
 
-from download_toolbox.base import DataSet, Downloader
+from download_toolbox.base import DatasetConfig, Downloader
 from download_toolbox.cli import download_args
 from download_toolbox.download import ThreadedDownloader
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
 
 
-class ERA5DataSet(DataSet):
+class ERA5DatasetConfig(DatasetConfig):
     CDI_MAP = {
         'tas': '2m_temperature',
         'ta': 'temperature',  # 500
@@ -38,9 +38,9 @@ class ERA5DataSet(DataSet):
                          if identifier is None else identifier,
                          **kwargs)
 
-        self._cdi_map = ERA5DataSet.CDI_MAP
+        self._cdi_map = ERA5DatasetConfig.CDI_MAP
         if cdi_map_override is not None:
-            # self._cdi_map = {k: cdi_map_override for k in ERA5DataSet.CDI_MAP.keys()}
+            # self._cdi_map = {k: cdi_map_override for k in ERA5DatasetConfig.CDI_MAP.keys()}
             self._cdi_map.update(cdi_map_override)
 
     @property
@@ -222,7 +222,7 @@ def main():
         south=args.hemisphere == "south",
     )
 
-    dataset = ERA5DataSet(
+    dataset = ERA5DatasetConfig(
         levels=args.levels,
         location=location,
         var_names=args.vars,

@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from download_toolbox.base import DataSet, DataSetError, HTTPDownloader, DownloaderError
+from download_toolbox.base import DatasetConfig, DataSetError, HTTPDownloader, DownloaderError
 from download_toolbox.cli import download_args
 from download_toolbox.download import ThreadedDownloader
 from download_toolbox.location import Location
@@ -21,7 +21,7 @@ var_remove_list = ["polar_stereographic", "land"]
 
 
 # TODO: move resolutions elsewhere
-class AMSRDataSet(DataSet):
+class AMSRDatasetConfig(DatasetConfig):
     def __init__(self,
                  *args,
                  resolution=6.25,
@@ -54,14 +54,14 @@ class AMSRDownloader(HTTPDownloader):
 
     """
     def __init__(self,
-                 dataset: AMSRDataSet,
+                 dataset: AMSRDatasetConfig,
                  *args,
                  start_date: object,
                  **kwargs):
         amsr2_start = dt.date(2012, 7, 2)
 
         # TODO: Differing start date ranges for different products! Validate in dataset
-        # TODO: In fact, all date filtering against existing data should be done via DataSet
+        # TODO: In fact, all date filtering against existing data should be done via DatasetConfig
         if start_date < amsr2_start:
             raise DownloaderError("AMSR2 only exists past {}".format(amsr2_start))
         self._hemi_str = "s" if dataset.location.south else "n"
@@ -118,7 +118,7 @@ def main():
         south=args.hemisphere == "south",
     )
 
-    dataset = AMSRDataSet(
+    dataset = AMSRDatasetConfig(
         location=location,
         # TODO: there is no frequency selection for raw data - aggregation is a
         #  concern of the process-toolbox

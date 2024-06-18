@@ -41,8 +41,8 @@ def batch_requested_dates(dates: object,
     return batched_dates
 
 
-def merge_files(new_datafile: str,
-                other_datafile: str,
+def merge_files(new_datafile: object,
+                other_datafile: object,
                 drop_variables: object = None):
     """
 
@@ -60,7 +60,7 @@ def merge_files(new_datafile: str,
         d1 = xr.open_dataarray(moved_new_datafile,
                                drop_variables=drop_variables)
 
-        logging.info("Concatenating with previous data {}".format(
+        logging.debug("Concatenating with previous data {}".format(
             other_datafile
         ))
         d2 = xr.open_dataarray(other_datafile,

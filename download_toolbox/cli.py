@@ -124,6 +124,9 @@ def download_args(choices: object = None,
         ap.add_argument("-f", "--frequency",
                         choices=freq_avail,
                         default=freq_avail[-1])
+        ap.add_argument("-o", "--output-group-by",
+                        choices=freq_avail,
+                        default=freq_avail[0])
 
     if workers:
         ap.add_argument("-w", "--workers", default=8, type=int)

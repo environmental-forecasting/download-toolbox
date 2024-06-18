@@ -10,7 +10,7 @@ import xarray as xr
 from pyesgf.search import SearchConnection
 from pyesgf.logon import LogonManager
 
-from download_toolbox.base import DataSet, Downloader
+from download_toolbox.base import DatasetConfig, Downloader
 from download_toolbox.cli import download_args
 from download_toolbox.download import ThreadedDownloader
 from download_toolbox.location import Location
@@ -21,7 +21,7 @@ from download_toolbox.time import Frequency
 """
 
 
-class CMIP6DataSet(DataSet):
+class CMIP6DatasetConfig(DatasetConfig):
 
     DAY_TABLE_MAP = {
         'siconca': 'SI{}',
@@ -98,13 +98,13 @@ class CMIP6DataSet(DataSet):
         assert type(self._grid_override) is dict, "Grid override should be a dictionary if supplied"
         assert type(self._table_map_override) is dict, "Table map override should be a dictionary if supplied"
 
-        self._grid_map = CMIP6DataSet.GRID_MAP
+        self._grid_map = CMIP6DatasetConfig.GRID_MAP
         if default_grid is not None:
-            self._grid_map = {k: default_grid for k in CMIP6DataSet.GRID_MAP.keys()}
+            self._grid_map = {k: default_grid for k in CMIP6DatasetConfig.GRID_MAP.keys()}
         self._grid_map.update(self._grid_override)
 
         self._table_map = {k: v.format(self.frequency) for k, v in
-                           getattr(CMIP6DataSet, "{}_TABLE_MAP".format(self.frequency.upper())).items()}
+                           getattr(CMIP6DatasetConfig, "{}_TABLE_MAP".format(self.frequency.upper())).items()}
 
     @property
     def experiments(self):
@@ -435,7 +435,7 @@ def main():
         south=args.hemisphere == "south",
     )
 
-    dataset = CMIP6DataSet(
+    dataset = CMIP6DatasetConfig(
         levels=args.levels,
         location=location,
         member=args.member,

@@ -4,11 +4,12 @@ import collections
 
 import logging
 import os
+import tempfile
 
 from download_toolbox.config import Configuration
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
-from download_toolbox.data.utils import batch_requested_dates
+from download_toolbox.data.utils import batch_requested_dates, merge_files
 
 import pandas as pd
 import xarray as xr
@@ -68,6 +69,19 @@ class DataCollection(metaclass=ABCMeta):
         self._config.render(path)
 
     @property
+    def config(self):
+        return self._config
+
+    @staticmethod
+    def open_config(config):
+        logging.info("Opening dataset config {}".format(config))
+        raise RuntimeError("This is not yet implemented, get working for preprocess-toolbox!")
+
+    def save_config(self):
+        saved_config = self._config.render(self)
+        logging.info("Saved dataset config {}".format(saved_config))
+
+    @property
     def identifier(self) -> str:
         """The identifier (label) for this data collection."""
         return self._identifier
@@ -78,23 +92,24 @@ class VarConfig(collections.namedtuple("VarConfig", ["name", "prefix", "level", 
         return "{} with path {}".format(self.name, self.path)
 
 
-class DataSet(DataCollection):
-    """A dataset is an implementation of the base collection, adding characteristics.
+class DatasetConfig(DataCollection):
+    """A datasetconfig is an implementation of the base data collection, adding characteristics.
+
+    Yes, this is intentionally not called a dataset as it doesn't override xarray.Dataset and
+    it feels nicer that it represents a configuration for a Dataset, rather than a Dataset itself
 
     The additional characteristics that are implemented at this level:
         1. Location awareness
         2. Variables and levels
 
     TODO: align to https://www.geoapi.org/snapshot/python/metadata.html#metadata-iso-19115
-      - intention is to eventually describe the DataSet and metadata conformantly
+      - intention is to eventually describe the DatasetConfig and metadata conformantly
 
-    :param dry: Flag specifying whether the data producer should be in dry run mode or not.
     :param overwrite: Flag specifying whether existing files should be overwritten or not.
     """
 
     def __init__(self,
                  *args,
-                 dry: bool = False,
                  frequency: object = Frequency.DAY,
                  levels: object = (),
                  location: object,
@@ -104,11 +119,10 @@ class DataSet(DataCollection):
                  valid_frequencies: tuple = (Frequency.DAY, Frequency.MONTH),
                  var_names: object = (),
                  **kwargs) -> None:
-        super(DataSet, self).__init__(*args,
-                                      path_components=[frequency.name.lower()],
-                                      **kwargs)
+        super(DatasetConfig, self).__init__(*args,
+                                            path_components=[frequency.name.lower()],
+                                            **kwargs)
 
-        self._dry = dry
         self._frequency = frequency
         self._levels = list(levels)
         self._location = location
@@ -124,7 +138,7 @@ class DataSet(DataCollection):
 
         if self._frequency < self._output_group_by:
             raise DataSetError("You can't request a higher output frequency than request frequency: {} vs {}".
-                               format(self._output_group_by, self._frequency))
+                               format(self._output_group_by.name, self._frequency.name))
 
         if self._frequency not in valid_frequencies:
             raise DataSetError("Only the following frequencies are valid for request".format(valid_frequencies))
@@ -181,7 +195,76 @@ class DataSet(DataCollection):
             extant_ds.close()
         return dt_arr
 
+    def save_data_for_config(self,
+                             rename_var_list: dict = None,
+                             source_ds: object = None,
+                             source_files: list = None,
+                             var_filter_list: list = None):
+        # Check whether we have a valid source
+        ds = None
+        if type(source_ds) in [xr.Dataset, xr.DataArray]:
+            ds = source_ds if type(source_ds) is xr.DataArray else source_ds.to_dataset()
+
+            if source_files is not None:
+                raise RuntimeError("Not able to combine sources in save_dataset at present")
+        elif source_files is not None and len(source_files) > 0:
+            ds = xr.open_mfdataset(source_files)
+
+        # Strip out unnecessary / unwanted variables
+        if var_filter_list is not None:
+            ds = ds.drop_vars(var_filter_list, errors="ignore")
+
+        # TODO: Reduce spatially to required location
+
+        # Reduce temporally to required resolution
+        # TODO: Note, https://github.com/pydata/xarray/issues/364 for Grouper functionality?
+        #   - we might have to roll our own functionality in the meantime, if necessary
+        group_by = "time.{}".format(self._output_group_by.attribute)
+
+        # Rename if requested
+        if rename_var_list:
+            logging.info("Renaming {} variables if available".format(rename_var_list))
+            ds = ds.rename_vars({k: v for k, v in rename_var_list.items() if k in ds.data_vars})
+
+        # For all variables in ds, determine if there are destinations available
+        for var_name in [vn for vn in ds.data_vars if vn in self._var_names]:
+            da = getattr(ds, var_name)
+
+            levels = self._levels[self._var_names.index(var_name)]
+            for level in levels if levels is not None else [None]:
+                var_config = self.var_config(var_name, level)
+
+                logging.debug("Grouping {} by {}".format(var_config, group_by))
+                for dt, dt_da in da.groupby(group_by):
+                    req_dates = pd.to_datetime(dt_da.time.values)
+                    logging.debug(req_dates)
+                    destination_path = self.var_filepath(var_config, req_dates)
+
+                    # If exists, merge and concatenate the data to destination (overwrite?) at output_group_by
+                    if os.path.exists(destination_path):
+                        fh, temporary_name = tempfile.mkstemp(dir=".")
+                        os.close(fh)
+                        dt_da.to_netcdf(temporary_name)
+                        dt_da.close()
+                        logging.info("Written new data to {} and merging with {}".format(
+                            temporary_name, destination_path
+                        ))
+                        merge_files(destination_path, temporary_name)
+                    else:
+                        logging.info("Saving {}".format(destination_path))
+                        dt_da.to_netcdf(destination_path)
+                        dt_da.close()
+
+        # Write out the configuration file
+        self.save_config()
+
     def var_config(self, var_name, level=None):
+        """
+
+        :param var_name:
+        :param level:
+        :return:
+        """
         var_full_name = "{}{}".format(var_name,
                                       str(level) if level is not None else "")
 
@@ -192,14 +275,34 @@ class DataSet(DataCollection):
             path=self._get_data_var_folder(var_full_name)
         )
 
+    def var_filepath(self, *args, **kwargs) -> os.PathLike:
+        return self.var_filepaths(*args, **kwargs, single_only=True)[0]
+
     def var_filepaths(self,
                       var_config: VarConfig,
-                      date_batch: list) -> set:
+                      date_batch: list,
+                      single_only: bool = False) -> list:
+        """
+
+        :param var_config:
+        :param date_batch:
+        :param single_only:
+        :return:
+        """
         output_filepaths = set([
-            os.path.join(var_config.path, date.strftime(self._output_group_by.date_format))
+            os.path.join(var_config.path, "{}.nc".format(date.strftime(self._output_group_by.date_format)))
             for date in date_batch])
-        logging.debug("Got {} filenames".format(output_filepaths))
-        return output_filepaths
+
+        if len(output_filepaths) > 1 and single_only:
+            raise DataSetError("Filenames returned for {} dates should have been "
+                               "singular but {} returnable, check your call / config".
+                               format(len(date_batch), len(output_filepaths)))
+
+        if len(output_filepaths) == 0:
+            logging.warning("No filenames provided for {} - {}".format(var_config, len(date_batch)))
+        else:
+            logging.debug("Got filenames: {}".format(output_filepaths))
+        return list(output_filepaths)
 
     @property
     def frequency(self):
@@ -222,13 +325,13 @@ class Downloader(metaclass=abc.ABCMeta):
     """Abstract base class for a downloader.
 
     Performs operations on DataSets, we handle operations affecting the status of
-    said DataSet:
+    said DatasetConfig:
         1. Specify date range
 
     """
 
     def __init__(self,
-                 dataset: DataSet,
+                 dataset: DatasetConfig,
                  *args,
                  delete_tempfiles: bool = True,
                  download: bool = True,
@@ -270,32 +373,14 @@ class Downloader(metaclass=abc.ABCMeta):
             for req_date_batch in batch_requested_dates(dates=dates, attribute=self.requests_group_by.attribute):
                 logging.info("Processing download for {} with {} dates".
                              format(var_config.name, len(req_date_batch)))
-                destination_file = self.dataset.var_filepaths(var_config, req_date_batch)
-
-                if len(destination_file) > 1:
-                    raise DownloaderError("The batch is too large for an individual file output: {}".
-                                          format(destination_file))
-
-                files_downloaded = self._download_method(var_config, req_date_batch, destination_file)
+                files_downloaded = self._download_method(var_config, req_date_batch)
                 logging.info("{} files downloaded".format(len(files_downloaded)))
                 self._files_downloaded.extend(files_downloaded)
-
-            # TODO: save_temporal_files needs to LOCK and merge data into existing files
-            #destination_file = self.dataset.var_filepath(var_config, self.dates)
-            #if self._postprocess:
-            #    self.postprocess(temporary_files, destination_file)
-
-    def postprocess(self, source_filename, destination_filename):
-        logging.debug("Calling default postprocessor to move {} to {}".format(
-            source_filename, destination_filename
-        ))
-        os.rename(source_filename, destination_filename)
 
     @abstractmethod
     def _single_download(self,
                          var_config: object,
-                         req_dates: object,
-                         download_path: object) -> list:
+                         req_dates: object) -> list:
         raise NotImplementedError("_single_download needs an implementation")
 
     @property
@@ -327,8 +412,8 @@ class Downloader(metaclass=abc.ABCMeta):
         return self._drop_vars
 
     @property
-    def output_group_by(self):
-        return self._output_group_by
+    def files_downloaded(self):
+        return self._files_downloaded
 
     @property
     def requests_group_by(self):

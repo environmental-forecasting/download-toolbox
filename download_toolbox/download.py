@@ -33,12 +33,10 @@ class ThreadedDownloader(Downloader, metaclass=ABCMeta):
     """
 
     def __init__(self, *args,
-                 additional_thread_args: tuple = None,
                  max_threads: int = 1,
                  **kwargs):
         super().__init__(*args, **kwargs)
 
-        self._additional_args = additional_thread_args
         self._max_threads = max_threads
 
     def download(self):
@@ -61,7 +59,7 @@ class ThreadedDownloader(Downloader, metaclass=ABCMeta):
                 logging.info("Processing single download for {} with {} dates".
                              format(var_config.name, len(req_date_batch)))
 
-                requests.append((var_config, req_date_batch, *self._additional_args))
+                requests.append((var_config, req_date_batch))
 
         max_workers = min(len(requests), self._max_threads)
         logging.info("Creating thread pool with {} workers to service {} batches"
@@ -76,7 +74,7 @@ class ThreadedDownloader(Downloader, metaclass=ABCMeta):
 
             for future in concurrent.futures.as_completed(futures):
                 try:
-                    future.result()
+                    self._files_downloaded.extend(future.result())
                 except Exception as e:
                     logging.exception("Thread failure: {}".format(e))
 
@@ -101,7 +99,7 @@ class FTPClient(object):
                        destination_path: object):
         thread_id = threading.get_native_id()
         if threading.get_native_id() not in self._ftp_connections:
-            logging.debug("FTP opening for {}".format(thread_id))
+            logging.debug("FTP opening for thread {}".format(thread_id))
             self._ftp_connections[thread_id] = FTP(self._ftp_host)
             ftp_connection = self._ftp_connections[thread_id]
             ftp_connection.login()
