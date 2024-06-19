@@ -1,12 +1,15 @@
 from enum import Enum, auto
 
 
-# TODO: review enum usage, especially in light of varying python versions which
-#  change the enum modules facilities a lot
 class Frequency(int, Enum):
+    """
+
+    https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#period-aliases
+
+    """
     YEAR = 1, "%Y", "Y", "year"
-    MONTH = 2, "%Y%m", "M", "month"
-    DAY = 3, "%Y%m%d", "D", "date"
+    MONTH = 2, "%Y%m", "ME", "month"
+    DAY = 3, "%Y%m%d", "D", "day"
 
     def __new__(cls, value, date_format, freq, attribute):
         member = int.__new__(cls, value)

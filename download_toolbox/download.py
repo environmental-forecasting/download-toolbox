@@ -55,7 +55,7 @@ class ThreadedDownloader(Downloader, metaclass=ABCMeta):
         requests = list()
 
         for var_config in self.dataset.variables:
-            for req_date_batch in batch_requested_dates(dates=self.dates, attribute=self.requests_group_by.attribute):
+            for req_date_batch in batch_requested_dates(dates=self.dates, attribute=self.batch_frequency.attribute):
                 logging.info("Processing single download for {} with {} dates".
                              format(var_config.name, len(req_date_batch)))
 

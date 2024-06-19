@@ -71,13 +71,13 @@ class AMSRDownloader(ThreadedDownloader):
                          var_config: object,
                          req_dates: object):
 
-        if len(set([el.year for el in req_dates]).difference([req_dates[0].year])) > 0:
-            raise DownloaderError("Batches of dates must not exceed a year boundary for AMSR2")
+        # if len(set([el.year for el in req_dates]).difference([req_dates[0].year])) > 0:
+        #     raise DownloaderError("Batches of dates must not exceed a year boundary for AMSR2")
 
         files_downloaded = []
-        year_dir = str(req_dates[0].year)
 
         for file_date in req_dates:
+            year_dir = str(req_dates[0].year)
             date_str = file_date.strftime("%Y%m%d")
 
             file_in_question = "{}/asi-AMSR2-{}{}-{}-v5.4.nc".\

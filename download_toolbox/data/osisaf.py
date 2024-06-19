@@ -241,6 +241,8 @@ class SICDownloader(ThreadedDownloader):
 
         super().__init__(dataset,
                          *args,
+                         # We can download both daily and monthly data
+                         source_min_frequency=Frequency.MONTH,
                          start_date=start_date,
                          **kwargs)
 
@@ -248,8 +250,8 @@ class SICDownloader(ThreadedDownloader):
                          var_config: object,
                          req_dates: object) -> list:
 
-        if len(set([el.year for el in req_dates]).difference([req_dates[0].year])) > 0:
-            raise DownloaderError("Individual batches of dates must not exceed a year boundary for AMSR2")
+        #if len(set([el.year for el in req_dates]).difference([req_dates[0].year])) > 0:
+        #    raise DownloaderError("Individual batches of dates must not exceed a year boundary for AMSR2")
 
         downloaded_files = []
 
