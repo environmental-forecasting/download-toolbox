@@ -14,13 +14,17 @@ maintainers = [
 ]
 dependencies = [
     "cdsapi",
+    "cfgrib",
+	"dask[distributed]",
     "eccodes",
     "ecmwf-api-client",
     "esgf-pyclient",
+    "motuclient",
     "pip",
-    "scitools-iris",
+    "pydap",
     "setuptools",
     "wheel",
+	"urllib3<2.0.0",
     "xarray[io]"
 ]
 classifiers = [
