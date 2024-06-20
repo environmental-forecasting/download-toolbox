@@ -216,10 +216,15 @@ class DatasetConfig(DataCollection):
             if source_files is not None:
                 raise RuntimeError("Not able to combine sources in save_dataset at present")
         elif source_files is not None and len(source_files) > 0:
-            ds = xr.open_mfdataset(source_files,
-                                   concat_dim="time",
-                                   combine="nested",
-                                   parallel=True)
+            try:
+                ds = xr.open_mfdataset(source_files,
+                                       concat_dim="time",
+                                       combine="nested",
+                                       parallel=True)
+            except ValueError as e:
+                logging.exception("Could not open files {} with error".format(source_files))
+                raise DataSetError(e)
+
             if time_dim_values is not None:
                 logging.warning("Assigning time dimension with {} values".format(len(time_dim_values)))
                 ds = ds.assign(dict(time=[pd.Timestamp(d) for d in time_dim_values]))
