@@ -268,19 +268,25 @@ class SICDownloader(ThreadedDownloader):
             ftp_conc = "/reprocessed/ice/conc/{}/{}/".format(version_str, freq_path_str)
             ftp_reproc = "/reprocessed/ice/conc-cont-reproc/{}/{}/".format(version_str, freq_path_str)
 
-            source_base = ftp_conc if file_date < self._reproc_start else ftp_reproc
+            if file_date < self._reproc_start:
+                file_base = "ice_conc_{}_ease2-250_cdr-v3p0".format(self._hemi_str)
+                source_base = ftp_conc
+            else:
+                file_base = "ice_conc_{}_ease2-250_icdr-v3p0".format(self._hemi_str)
+                source_base = ftp_reproc
+
             source_base = source_base.format(file_date.year, file_date.month)
 
             if monthly_file:
                 source_base = source_base.format(file_date.year)
                 dest_base = freq_path_str.format(file_date.year)
-                file_in_question = "ice_conc_{}_ease2-250_icdr-v3p0_{:04d}{:02d}.nc". \
-                    format(self._hemi_str, file_date.year, file_date.month)
+                file_in_question = "{}_{:04d}{:02d}.nc". \
+                    format(file_base, file_date.year, file_date.month)
             else:
                 source_base = source_base.format(file_date.year, file_date.month)
                 dest_base = freq_path_str.format(file_date.year, file_date.month)
-                file_in_question = "ice_conc_{}_ease2-250_icdr-v3p0_{:04d}{:02d}{:02d}1200.nc". \
-                    format(self._hemi_str, file_date.year, file_date.month, file_date.day)
+                file_in_question = "{}_{:04d}{:02d}{:02d}1200.nc". \
+                    format(file_base, file_date.year, file_date.month, file_date.day)
 
             destination_path = os.path.join(var_config.root_path, dest_base, file_in_question)
 
