@@ -115,12 +115,9 @@ class FTPClient(object):
 
             ftp_files = [el for el in self._cache[source_dir] if el.endswith(source_filename)]
             if not len(ftp_files):
-                logging.warning("File is not available: {}".
-                                format(source_filename))
-                return None
+                raise DownloaderError("File is not available: {}".format(source_filename))
         except ftplib.error_perm as e:
-            logging.warning("FTP error, possibly missing directory {}: {}".format(source_dir, e))
-            return None
+            raise DownloaderError("FTP error, possibly missing directory {}: {}".format(source_dir, e))
 
         logging.debug("FTP Attempting to retrieve to {} from {}".format(destination_path, ftp_files[0]))
         with open(destination_path, "wb") as fh:
