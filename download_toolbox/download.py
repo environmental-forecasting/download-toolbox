@@ -150,9 +150,12 @@ class HTTPClient(object):
             logging.debug("{}-ing {} with {}".format(method, source_url, request_options))
             response = getattr(requests, method)(source_url, **request_options)
         except requests.exceptions.RequestException as e:
-            logging.warning("HTTP error, possibly missing directory {}: {}".format(source_url, e))
+            logging.warning("HTTP error {}: {}".format(source_url, e))
             return None
 
-        logging.debug("Attempting to output response content to {}".format(destination_path))
-        with open(destination_path, "wb") as fh:
-            fh.write(response.content)
+        if hasattr(response, "status_code") and response.status_code == 200:
+            logging.debug("Attempting to output response content to {}".format(destination_path))
+            with open(destination_path, "wb") as fh:
+                fh.write(response.content)
+        else:
+            logging.warning("HTTP response was not successful, writing nothing: {}".format(response.status_code))
