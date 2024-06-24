@@ -5,7 +5,7 @@ from abc import ABCMeta
 
 from concurrent.futures import ThreadPoolExecutor
 
-from download_toolbox.base import Downloader
+from download_toolbox.base import Downloader, DownloaderError
 from download_toolbox.data.utils import batch_requested_dates
 
 import ftplib
@@ -150,12 +150,11 @@ class HTTPClient(object):
             logging.debug("{}-ing {} with {}".format(method, source_url, request_options))
             response = getattr(requests, method)(source_url, **request_options)
         except requests.exceptions.RequestException as e:
-            logging.warning("HTTP error {}: {}".format(source_url, e))
-            return None
+            raise DownloaderError("HTTP error {}: {}".format(source_url, e))
 
         if hasattr(response, "status_code") and response.status_code == 200:
             logging.debug("Attempting to output response content to {}".format(destination_path))
             with open(destination_path, "wb") as fh:
                 fh.write(response.content)
         else:
-            logging.warning("HTTP response was not successful, writing nothing: {}".format(response.status_code))
+            raise DownloaderError("HTTP response was not successful, writing nothing: {}".format(response.status_code))
