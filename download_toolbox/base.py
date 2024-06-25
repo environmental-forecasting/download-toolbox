@@ -184,11 +184,14 @@ class DatasetConfig(DataCollection):
                            var_config: VarConfig,
                            dates: list) -> list:
         dt_arr = list(reversed(sorted(dates)))
+        filepaths = self.var_filepaths(var_config, dt_arr)
 
         # Filtering dates based on existing data
         extant_paths = set([filepath
-                            for filepath in self.var_filepaths(var_config, dt_arr)
+                            for filepath in filepaths
                             if os.path.exists(filepath)])
+        logging.info("Filtering {} dates against {} destination files".format(len(dt_arr), len(filepaths)))
+        logging.debug("Filepaths: {}".format(pformat(filepaths)))
 
         if len(extant_paths) > 0:
             extant_ds = xr.open_mfdataset(extant_paths)
