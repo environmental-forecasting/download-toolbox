@@ -8,7 +8,7 @@ class Frequency(int, Enum):
 
     """
     YEAR = 1, "%Y", "Y", "year"
-    MONTH = 2, "%Y%m", "ME", "month"
+    MONTH = 2, "%Y%m", "M", "month"
     DAY = 3, "%Y%m%d", "D", "day"
     HOUR = 4, "%Y%m%d%h", "H", "hour"
 
