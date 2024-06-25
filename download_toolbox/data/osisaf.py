@@ -250,9 +250,6 @@ class SICDownloader(ThreadedDownloader):
                          var_config: object,
                          req_dates: object) -> list:
 
-        #if len(set([el.year for el in req_dates]).difference([req_dates[0].year])) > 0:
-        #    raise DownloaderError("Individual batches of dates must not exceed a year boundary for AMSR2")
-
         downloaded_files = []
 
         for file_date in req_dates:

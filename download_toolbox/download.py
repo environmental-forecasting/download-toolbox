@@ -55,7 +55,7 @@ class ThreadedDownloader(Downloader, metaclass=ABCMeta):
         requests = list()
 
         for var_config in self.dataset.variables:
-            for req_date_batch in batch_requested_dates(dates=self.dates, attribute=self.batch_frequency.attribute):
+            for req_date_batch in batch_requested_dates(dates=self.dates, attribute=self.request_frequency.attribute):
                 logging.info("Processing single download for {} with {} dates".
                              format(var_config.name, len(req_date_batch)))
 
@@ -69,7 +69,7 @@ class ThreadedDownloader(Downloader, metaclass=ABCMeta):
             futures = []
 
             for args in requests:
-                future = executor.submit(self._single_download, *args)
+                future = executor.submit(self.download_method, *args)
                 futures.append(future)
 
             for future in concurrent.futures.as_completed(futures):
@@ -79,6 +79,10 @@ class ThreadedDownloader(Downloader, metaclass=ABCMeta):
                     logging.exception("Thread failure: {}".format(e))
 
         logging.info("{} files downloaded".format(len(self._files_downloaded)))
+
+    @property
+    def max_threads(self):
+        return self._max_threads
 
 
 class FTPClient(object):

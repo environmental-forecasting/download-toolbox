@@ -13,12 +13,15 @@ def batch_requested_dates(dates: object,
     TODO: should be using Pandas DatetimeIndexes / Periods for this, but the
      need to refactor slightly, and this is working for the moment
 
+    TODO: we should be yielding from here surely
+
     :param dates:
     :param attribute:
     :return:
     """
     dates = collections.deque(sorted(dates))
 
+    logging.debug("Got {} dates to batch".format(len(dates)))
     batched_dates = []
     batch = []
 
@@ -29,6 +32,7 @@ def batch_requested_dates(dates: object,
             if getattr(batch[-1], attribute) == getattr(dates[0], attribute):
                 batch.append(dates.popleft())
             else:
+                logging.debug("Appending batch of length {}".format(len(batch)))
                 batched_dates.append(batch)
                 batch = []
 
@@ -38,6 +42,7 @@ def batch_requested_dates(dates: object,
     if len(dates) > 0:
         raise RuntimeError("Batching didn't work!")
 
+    logging.debug("Return {} batches for {} batch".format(len(batched_dates), attribute))
     return batched_dates
 
 

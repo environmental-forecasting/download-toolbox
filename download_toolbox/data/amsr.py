@@ -13,7 +13,6 @@ from download_toolbox.time import Frequency
 var_remove_list = ["polar_stereographic", "land"]
 
 
-# TODO: move resolutions elsewhere
 class AMSRDatasetConfig(DatasetConfig):
     def __init__(self,
                  *args,
@@ -70,9 +69,6 @@ class AMSRDownloader(ThreadedDownloader):
     def _single_download(self,
                          var_config: object,
                          req_dates: object):
-
-        # if len(set([el.year for el in req_dates]).difference([req_dates[0].year])) > 0:
-        #     raise DownloaderError("Batches of dates must not exceed a year boundary for AMSR2")
 
         files_downloaded = []
 

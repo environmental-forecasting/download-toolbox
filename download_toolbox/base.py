@@ -246,35 +246,31 @@ class DatasetConfig(DataCollection):
             ds = ds.rename_vars({k: v for k, v in rename_var_list.items() if k in ds.data_vars})
 
         # For all variables in ds, determine if there are destinations available
-        for var_name in [vn for vn in ds.data_vars if vn in self._var_names]:
-            da = getattr(ds, var_name)
+        for var_config in [vc for vc in self.variables if vc.name in ds.data_vars]:
+            da = getattr(ds, var_config.name)
             logging.debug("Resampling to period 1{}".format(self.frequency.freq))
             da = da.resample(time="1{}".format(self.frequency.freq)).mean()
 
-            levels = self._levels[self._var_names.index(var_name)]
-            for level in levels if levels is not None else [None]:
-                var_config = self.var_config(var_name, level)
+            logging.debug("Grouping {} by {}".format(var_config, group_by))
+            for dt, dt_da in da.groupby(group_by):
+                req_dates = pd.to_datetime(dt_da.time.values)
+                logging.debug(req_dates)
+                destination_path = self.var_filepath(var_config, req_dates)
 
-                logging.debug("Grouping {} by {}".format(var_config, group_by))
-                for dt, dt_da in da.groupby(group_by):
-                    req_dates = pd.to_datetime(dt_da.time.values)
-                    logging.debug(req_dates)
-                    destination_path = self.var_filepath(var_config, req_dates)
-
-                    # If exists, merge and concatenate the data to destination (overwrite?) at output_group_by
-                    if os.path.exists(destination_path):
-                        fh, temporary_name = tempfile.mkstemp(dir=".")
-                        os.close(fh)
-                        dt_da.to_netcdf(temporary_name)
-                        dt_da.close()
-                        logging.info("Written new data to {} and merging with {}".format(
-                            temporary_name, destination_path
-                        ))
-                        merge_files(destination_path, temporary_name)
-                    else:
-                        logging.info("Saving {}".format(destination_path))
-                        dt_da.to_netcdf(destination_path)
-                        dt_da.close()
+                # If exists, merge and concatenate the data to destination (overwrite?) at output_group_by
+                if os.path.exists(destination_path):
+                    fh, temporary_name = tempfile.mkstemp(dir=".")
+                    os.close(fh)
+                    dt_da.to_netcdf(temporary_name)
+                    dt_da.close()
+                    logging.info("Written new data to {} and merging with {}".format(
+                        temporary_name, destination_path
+                    ))
+                    merge_files(destination_path, temporary_name)
+                else:
+                    logging.info("Saving {}".format(destination_path))
+                    dt_da.to_netcdf(destination_path)
+                    dt_da.close()
 
         # Write out the configuration file
         self.save_config()
@@ -322,8 +318,7 @@ class DatasetConfig(DataCollection):
 
         if len(output_filepaths) == 0:
             logging.warning("No filenames provided for {} - {}".format(var_config, len(date_batch)))
-        else:
-            logging.debug("Got filenames: {}".format(output_filepaths))
+
         return list(output_filepaths)
 
     @property
@@ -339,7 +334,7 @@ class DatasetConfig(DataCollection):
         for var_name, levels in zip(self._var_names, self._levels):
             for level in levels if levels is not None else [None]:
                 var_config = self.var_config(var_name, level)
-                logging.debug("Returning configuration: {}".format(var_config))
+                # logging.debug("Returning configuration: {}".format(var_config))
                 yield var_config
 
 
@@ -349,6 +344,8 @@ class Downloader(metaclass=abc.ABCMeta):
     Performs operations on DataSets, we handle operations affecting the status of
     said DatasetConfig:
         1. Specify date range
+        2. Specify batching behaviours:
+            -
 
     """
 
@@ -360,26 +357,27 @@ class Downloader(metaclass=abc.ABCMeta):
                  drop_vars: list = None,
                  end_date: object,
                  postprocess: bool = True,
-                 requests_group_by: object = Frequency.MONTH,
+                 request_frequency: object = Frequency.MONTH,
                  source_min_frequency: object = Frequency.DAY,
                  source_max_frequency: object = Frequency.DAY,
                  start_date: object,
                  **kwargs):
         super().__init__()
 
-        self._batch_frequency = source_min_frequency if requests_group_by < source_min_frequency else \
-            source_max_frequency if requests_group_by > source_max_frequency else requests_group_by
-        # TODO: this needs to be moved into download_toolbox.time
         self._dates = [pd.to_datetime(date).date() for date in
-                       pd.date_range(start_date, end_date, freq=self._batch_frequency.freq)]
+                       pd.date_range(start_date, end_date, freq=dataset.frequency.freq)]
         self._delete = delete_tempfiles
         self._download = download
         self._drop_vars = list() if drop_vars is None else drop_vars
         self._files_downloaded = []
         self._postprocess = postprocess
-        self._requests_group_by = requests_group_by
+        self._request_frequency = source_min_frequency \
+            if request_frequency < source_min_frequency else source_max_frequency \
+            if request_frequency > source_max_frequency else request_frequency
         self._source_min_frequency = source_min_frequency
         self._source_max_frequency = source_max_frequency
+
+        logging.info("Request frequency set to {}".format(self.request_frequency.name))
 
         self._ds = dataset
 
@@ -398,7 +396,7 @@ class Downloader(metaclass=abc.ABCMeta):
         for var_config in self.dataset.variables:
             dates = self.dataset.filter_extant_data(var_config, self.dates)
 
-            for req_date_batch in batch_requested_dates(dates=dates, attribute=self.batch_frequency.attribute):
+            for req_date_batch in batch_requested_dates(dates=dates, attribute=self.request_frequency.attribute):
                 logging.info("Processing download for {} with {} dates".
                              format(var_config.name, len(req_date_batch)))
                 files_downloaded = self._download_method(var_config, req_date_batch)
@@ -410,10 +408,6 @@ class Downloader(metaclass=abc.ABCMeta):
                          var_config: object,
                          req_dates: object) -> list:
         raise NotImplementedError("_single_download needs an implementation")
-
-    @property
-    def batch_frequency(self) -> Frequency:
-        return self._batch_frequency
 
     @property
     def dataset(self):
@@ -448,8 +442,8 @@ class Downloader(metaclass=abc.ABCMeta):
         return self._files_downloaded
 
     @property
-    def requests_group_by(self):
-        return self._requests_group_by
+    def request_frequency(self) -> Frequency:
+        return self._request_frequency
 
 
 class DataCollectionError(RuntimeError):
