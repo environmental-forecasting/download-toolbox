@@ -73,7 +73,7 @@ class AMSRDownloader(ThreadedDownloader):
         files_downloaded = []
 
         for file_date in req_dates:
-            year_dir = str(req_dates[0].year)
+            year_dir = str(file_date.year)
             date_str = file_date.strftime("%Y%m%d")
 
             file_in_question = "{}/asi-AMSR2-{}{}-{}-v5.4.nc".\
