@@ -1,10 +1,11 @@
 import abc
 from abc import abstractmethod, ABCMeta
 import collections
-
 import logging
 import os
 import tempfile
+
+from pprint import pformat
 
 from download_toolbox.config import Configuration
 from download_toolbox.location import Location
@@ -217,6 +218,7 @@ class DatasetConfig(DataCollection):
                 raise RuntimeError("Not able to combine sources in save_dataset at present")
         elif source_files is not None and len(source_files) > 0:
             try:
+                logging.debug("Opening source files: {}".format(pformat(source_files)))
                 ds = xr.open_mfdataset(source_files,
                                        concat_dim="time",
                                        combine="nested",

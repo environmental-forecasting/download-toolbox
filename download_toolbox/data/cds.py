@@ -150,6 +150,7 @@ class ERA5Downloader(ThreadedDownloader):
                 retrieve_dict,
                 temp_download_path)
             logging.info("Download completed: {}".format(temp_download_path))
+
         # cdsapi uses raise Exception in many places, so having a catch-all is appropriate
         except Exception as e:
             logging.exception("{} not downloaded, look at the problem".format(temp_download_path))
