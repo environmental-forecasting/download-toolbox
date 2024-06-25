@@ -153,7 +153,8 @@ class ERA5Downloader(ThreadedDownloader):
         # cdsapi uses raise Exception in many places, so having a catch-all is appropriate
         except Exception as e:
             logging.exception("{} not downloaded, look at the problem".format(temp_download_path))
-            raise DownloaderError(e)
+            self.missing_dates.extend(req_dates)
+            return []
 
         ds = xr.open_dataset(temp_download_path)
         ds = ds.rename({list(ds.data_vars)[0]: var_config.name})

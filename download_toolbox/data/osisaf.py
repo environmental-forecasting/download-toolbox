@@ -299,6 +299,7 @@ class SICDownloader(ThreadedDownloader):
                     downloaded_files.append(destination_path)
                 except DownloaderError as e:
                     logging.warning("Failed to download {}: {}".format(destination_path, e))
+                    self.missing_dates.append(file_date)
             else:
                 logging.debug("{} already exists".format(destination_path))
                 downloaded_files.append(destination_path)

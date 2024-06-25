@@ -92,6 +92,7 @@ class AMSRDownloader(ThreadedDownloader):
                     files_downloaded.append(destination_path)
                 except DownloaderError as e:
                     logging.warning("Failed to download {}: {}".format(destination_path, e))
+                    self.missing_dates.append(file_date)
             else:
                 logging.debug("{} already exists".format(destination_path))
                 files_downloaded.append(destination_path)
@@ -132,6 +133,6 @@ def main():
     dataset.save_data_for_config(
         rename_var_list=dict(z="siconca"),
         source_files=sic.files_downloaded,
-        time_dim_values=sic.dates,
+        time_dim_values=[date for date in sic.dates if date not in sic.missing_dates],
         var_filter_list=var_remove_list
     )

@@ -370,6 +370,7 @@ class Downloader(metaclass=abc.ABCMeta):
         self._download = download
         self._drop_vars = list() if drop_vars is None else drop_vars
         self._files_downloaded = []
+        self._missing_dates = []
         self._postprocess = postprocess
         self._request_frequency = source_min_frequency \
             if request_frequency < source_min_frequency else source_max_frequency \
@@ -440,6 +441,10 @@ class Downloader(metaclass=abc.ABCMeta):
     @property
     def files_downloaded(self):
         return self._files_downloaded
+
+    @property
+    def missing_dates(self):
+        return self._missing_dates
 
     @property
     def request_frequency(self) -> Frequency:
