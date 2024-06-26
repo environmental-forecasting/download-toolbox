@@ -191,19 +191,18 @@ class DatasetConfig(DataCollection):
                             for filepath in filepaths
                             if os.path.exists(filepath)])
         logging.info("Filtering {} dates against {} destination files".format(len(dt_arr), len(filepaths)))
-        logging.debug("Filepaths: {}".format(pformat(filepaths)))
+        logging.debug("Filtering against: {}".format(pformat(filepaths)))
 
         if len(extant_paths) > 0:
             extant_ds = xr.open_mfdataset(extant_paths)
-            exclude_dates = pd.to_datetime(extant_ds.time.values)
-            logging.info("Excluding {} dates already existing from {} dates "
-                         "requested.".format(len(exclude_dates), len(dt_arr)))
+            exclude_dates = [pd.to_datetime(d).date() for d in extant_ds.time.values]
 
             dt_arr = sorted(list(set(dt_arr).difference(exclude_dates)))
             dt_arr.reverse()
 
             # We won't hold onto an active dataset during network I/O
             extant_ds.close()
+            logging.debug("{} dates filtered down to {} dates".format(len(dates), len(dt_arr)))
         return dt_arr
 
     def save_data_for_config(self,
@@ -223,8 +222,7 @@ class DatasetConfig(DataCollection):
             try:
                 logging.debug("Opening source files: {}".format(pformat(source_files)))
                 ds = xr.open_mfdataset(source_files,
-                                       concat_dim="time",
-                                       combine="nested",
+                                       combine="by_coords",
                                        parallel=True)
             except ValueError as e:
                 logging.exception("Could not open files {} with error".format(source_files))
@@ -233,6 +231,9 @@ class DatasetConfig(DataCollection):
             if time_dim_values is not None:
                 logging.warning("Assigning time dimension with {} values".format(len(time_dim_values)))
                 ds = ds.assign(dict(time=[pd.Timestamp(d) for d in time_dim_values]))
+        else:
+            logging.warning("No data provided as data object or source files, not doing anything")
+            return
 
         # Strip out unnecessary / unwanted variables
         if var_filter_list is not None:
@@ -253,7 +254,7 @@ class DatasetConfig(DataCollection):
         # For all variables in ds, determine if there are destinations available
         for var_config in [vc for vc in self.variables if vc.name in ds.data_vars]:
             da = getattr(ds, var_config.name)
-            logging.debug("Resampling to period 1{}".format(self.frequency.freq))
+            logging.debug("Resampling to period 1{}: {}".format(self.frequency.freq, da))
             da = da.resample(time="1{}".format(self.frequency.freq)).mean()
 
             logging.debug("Grouping {} by {}".format(var_config, group_by))

@@ -109,11 +109,15 @@ class ERA5Downloader(ThreadedDownloader):
         logging.debug("Processing {} dates for {}".format(len(req_dates), var_config))
         monthly_request = self.dataset.frequency < Frequency.DAY
         product_type = "reanalysis" if not monthly_request else "monthly_averaged_reanalysis_by_hour_of_day"
+
         temp_download_path = os.path.join(var_config.root_path,
+                                          self.dataset.location.name,
                                           "temp.{}".format(os.path.basename(
                                               self.dataset.var_filepath(var_config, req_dates))))
         download_path = os.path.join(var_config.root_path,
+                                     self.dataset.location.name,
                                      os.path.basename(self.dataset.var_filepath(var_config, req_dates)))
+        os.makedirs(os.path.dirname(download_path), exist_ok=True)
 
         retrieve_dict = {
             "product_type": product_type,
@@ -124,6 +128,8 @@ class ERA5Downloader(ThreadedDownloader):
             # TODO: assumption about the time of day!
             "time": "12:00",
             "format": "netcdf",
+            # TODO: explicit, but should be implicit
+            "grid": [0.25, 0.25],
             "area": self.dataset.location.bounds,
         }
 
@@ -137,37 +143,40 @@ class ERA5Downloader(ThreadedDownloader):
             retrieve_dict["day"] = ["{:02d}".format(d) for d in range(1, 32)]
             # retrieve_dict["time"] = ["{:02d}:00".format(h) for h in range(0, 24)]
 
-        # TODO: we can merge_files into download_path to save on the caching
         if os.path.exists(temp_download_path):
             raise DownloaderError("{} already exists, this shouldn't be the case, please consider altering the "
                                   "time resolution of request to avoid downloaded data clashes".format(temp_download_path))
 
-        if not os.path.exists(download_path):
-            try:
-                logging.info("Downloading data for {}...".format(var_config.name))
+        try:
+            logging.info("Downloading data for {}...".format(var_config.name))
 
-                self.client.retrieve(
-                    dataset,
-                    retrieve_dict,
-                    temp_download_path)
-                logging.info("Download completed: {}".format(temp_download_path))
+            self.client.retrieve(
+                dataset,
+                retrieve_dict,
+                temp_download_path)
+            logging.info("Download completed: {}".format(temp_download_path))
 
-            # cdsapi uses raise Exception in many places, so having a catch-all is appropriate
-            except Exception as e:
-                logging.exception("{} not downloaded, look at the problem".format(temp_download_path))
-                self.missing_dates.extend(req_dates)
-                return []
+        # cdsapi uses raise Exception in many places, so having a catch-all is appropriate
+        except Exception as e:
+            logging.exception("{} not downloaded, look at the problem".format(temp_download_path))
+            self.missing_dates.extend(req_dates)
+            return []
 
-            ds = xr.open_dataset(temp_download_path)
-            ds = ds.rename({list(ds.data_vars)[0]: var_config.name})
-            ds.to_netcdf(download_path)
-            ds.close()
+        ds = xr.open_dataset(temp_download_path)
+        ds = ds.rename({list(ds.data_vars)[0]: var_config.name})
+        if 'expver' in ds.coords:
+            logging.warning("expvers {} in coordinates, will process out but "
+                            "this needs further work: expver needs storing for "
+                            "later overwriting".format(ds.expver))
+            # Ref: https://confluence.ecmwf.int/pages/viewpage.action?pageId=173385064
+            ds = ds.sel(expver=1).combine_first(ds.sel(expver=5))
+        ds.to_netcdf(download_path)
+        ds.close()
 
-            if os.path.exists(temp_download_path):
-                logging.debug("Removing {}".format(temp_download_path))
-                os.unlink(temp_download_path)
-        else:
-            logging.warning("File already exists, assuming full of data: {}".format(download_path))
+        if os.path.exists(temp_download_path):
+            logging.debug("Removing {}".format(temp_download_path))
+            os.unlink(temp_download_path)
+
         return [download_path]
 
     def _single_download(self,

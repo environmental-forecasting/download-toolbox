@@ -52,31 +52,35 @@ class ThreadedDownloader(Downloader, metaclass=ABCMeta):
         logging.info("Building request(s), downloading and averaging "
                      "from {} API".format(self.dataset.identifier.upper()))
 
-        requests = list()
+        req_list = list()
 
         for var_config in self.dataset.variables:
-            for req_date_batch in batch_requested_dates(dates=self.dates, attribute=self.request_frequency.attribute):
+            dates = self.dataset.filter_extant_data(var_config, self.dates)
+
+            for req_date_batch in batch_requested_dates(dates=dates, attribute=self.request_frequency.attribute):
                 logging.info("Processing single download for {} with {} dates".
                              format(var_config.name, len(req_date_batch)))
 
-                requests.append((var_config, req_date_batch))
+                req_list.append((var_config, req_date_batch))
 
-        max_workers = min(len(requests), self._max_threads)
-        logging.info("Creating thread pool with {} workers to service {} batches"
-                     .format(max_workers, len(requests)))
+        max_workers = min(len(req_list), self._max_threads)
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = []
+        if max_workers > 0:
+            logging.info("Creating thread pool with {} workers to service {} batches"
+                         .format(max_workers, len(req_list)))
 
-            for args in requests:
-                future = executor.submit(self.download_method, *args)
-                futures.append(future)
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = []
 
-            for future in concurrent.futures.as_completed(futures):
-                try:
-                    self._files_downloaded.extend(future.result())
-                except Exception as e:
-                    logging.exception("Thread failure: {}".format(e))
+                for args in req_list:
+                    future = executor.submit(self.download_method, *args)
+                    futures.append(future)
+
+                for future in concurrent.futures.as_completed(futures):
+                    try:
+                        self._files_downloaded.extend(future.result())
+                    except Exception as e:
+                        logging.exception("Thread failure: {}".format(e))
 
         logging.info("{} files downloaded".format(len(self._files_downloaded)))
 
