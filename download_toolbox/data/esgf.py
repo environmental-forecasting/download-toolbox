@@ -231,7 +231,7 @@ class CMIP6LegacyDownloader(Downloader):
                 raise DownloaderError("Error encountered: {}".format(e))
             else:
                 logging.info("Writing {} to {}".format(cmip6_da, download_path))
-                os.makedirs(os.path.dirname(download_path))
+                os.makedirs(os.path.dirname(download_path), exist_ok=True)
                 cmip6_da.to_netcdf(download_path)
                 cmip6_da.close()
 
