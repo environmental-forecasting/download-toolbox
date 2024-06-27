@@ -407,8 +407,12 @@ class Downloader(metaclass=abc.ABCMeta):
                 logging.info("Processing download for {} with {} dates".
                              format(var_config.name, len(req_date_batch)))
                 files_downloaded = self._download_method(var_config, req_date_batch)
-                logging.info("{} files downloaded".format(len(files_downloaded)))
-                self._files_downloaded.extend(files_downloaded)
+
+                if files_downloaded is not None:
+                    logging.info("{} files downloaded".format(len(files_downloaded)))
+                    self._files_downloaded.extend(files_downloaded)
+                else:
+                    logging.warning("Nothing downloaded for {} on batch {}".format(var_config.name, req_date_batch))
 
     @abstractmethod
     def _single_download(self,

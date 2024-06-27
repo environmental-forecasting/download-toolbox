@@ -78,7 +78,14 @@ class ThreadedDownloader(Downloader, metaclass=ABCMeta):
 
                 for future in concurrent.futures.as_completed(futures):
                     try:
-                        self._files_downloaded.extend(future.result())
+                        files_downloaded = future.result()
+
+                        if files_downloaded is not None:
+                            logging.info("{} files downloaded".format(len(files_downloaded)))
+                            self._files_downloaded.extend(files_downloaded)
+                        else:
+                            logging.warning("Nothing downloaded from threaded batch")
+
                     except Exception as e:
                         logging.exception("Thread failure: {}".format(e))
 

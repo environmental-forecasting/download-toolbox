@@ -10,7 +10,7 @@ import xarray as xr
 from pyesgf.search import SearchConnection
 from pyesgf.logon import LogonManager
 
-from download_toolbox.base import DatasetConfig, Downloader
+from download_toolbox.base import DatasetConfig, Downloader, DataSetError, DownloaderError
 from download_toolbox.cli import download_args
 from download_toolbox.download import ThreadedDownloader
 from download_toolbox.location import Location
@@ -39,7 +39,7 @@ class CMIP6DatasetConfig(DatasetConfig):
         'ua': '{}',
     }
 
-    MON_TABLE_MAP = {
+    MONTH_TABLE_MAP = {
         'siconca': 'SI{}',
         'tas': '{}',
         'ta': '{}',
@@ -49,7 +49,7 @@ class CMIP6DatasetConfig(DatasetConfig):
         'rlds': '{}',
         'rsus': '{}',
         'rsds': '{}',
-        'zg': '{}',
+        'zg': 'A{}',
         'uas': '{}',
         'vas': '{}',
         'ua': '{}'
@@ -95,16 +95,18 @@ class CMIP6DatasetConfig(DatasetConfig):
         self._grid_override = dict() if grid_override is None else grid_override
         self._table_map_override = dict() if table_map_override is None else table_map_override
 
-        assert type(self._grid_override) is dict, "Grid override should be a dictionary if supplied"
-        assert type(self._table_map_override) is dict, "Table map override should be a dictionary if supplied"
+        if type(self._grid_override) is not dict:
+            raise DataSetError("Grid override should be a dictionary if supplied")
+        if type(self._table_map_override) is not dict:
+            raise DataSetError("Table map override should be a dictionary if supplied")
 
         self._grid_map = CMIP6DatasetConfig.GRID_MAP
         if default_grid is not None:
             self._grid_map = {k: default_grid for k in CMIP6DatasetConfig.GRID_MAP.keys()}
         self._grid_map.update(self._grid_override)
 
-        self._table_map = {k: v.format(self.frequency) for k, v in
-                           getattr(CMIP6DatasetConfig, "{}_TABLE_MAP".format(self.frequency.upper())).items()}
+        self._table_map = {k: v.format(self.frequency.cmip_id) for k, v in
+                           getattr(CMIP6DatasetConfig, "{}_TABLE_MAP".format(self.frequency.name.upper())).items()}
 
     @property
     def experiments(self):
@@ -127,122 +129,12 @@ class CMIP6DatasetConfig(DatasetConfig):
         return self._table_map
 
 
-class CMIP6PyESGFDownloader(Downloader):
-    """Climate downloader to provide CMIP6 reanalysis data from ESGF APIs
-
-    Useful CMIP6 guidance: https://pcmdi.llnl.gov/CMIP6/Guide/dataUsers.html
-
-    :param identifier: how to identify this dataset
-    :param source: source ID in ESGF node
-    :param member: member ID in ESGF node
-    :param nodes: list of ESGF nodes to query
-    :param experiments: experiment IDs to download
-    :param frequency: query parameter frequency
-    :param table_map: table map for
-    :param grid_map:
-    :param grid_override:
-    :param exclude_nodes:
-
-    "MRI-ESM2-0", "r1i1p1f1", None
-    "EC-Earth3", "r2i1p1f1", "gr"
-
-    """
-
-    # HTTP 500 search_node: object = "https://esgf.ceda.ac.uk/esg-search"
-
-    def __init__(self,
-                 *args,
-                 search_node: object = "https://esgf-data.dkrz.de/esg-search",
-                 **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self._connection = None
-        self._search_node = search_node
-
-        lm = LogonManager()
-        lm.logoff()
-        lm.is_logged_on()
-
-    def _single_download(self,
-                         var_config: object,
-                         req_dates: object,
-                         download_path: object):
-        """Overridden CMIP implementation for downloading from DAP server
-
-        Due to the size of the CMIP set and the fact that we don't want to make
-        1850-2100 yearly requests for all downloads, we have a bespoke and
-        overridden download implementation for this.
-
-        :param var_prefix:
-        :param level:
-        :param req_dates:
-        """
-
-        var, level = var_config.prefix, var_config.level
-
-        query = {
-            'source_id': self.dataset.source,
-            'member_id': self.dataset.member,
-            'frequency': self.dataset.frequency,
-            'variable_id': var,
-            'table_id': self.dataset.table_map[var],
-            'grid_label': self.dataset.grid_map[var],
-        }
-
-        results = []
-        self._connection = SearchConnection(self._search_node, distrib=True)
-
-        for experiment_id in self.dataset.experiments:
-            logging.info("Querying ESGF for experiment {} for {}".format(experiment_id, var))
-            query['experiment_id'] = experiment_id
-            ctx = self._connection.new_context(facets="variant_label,data_node", **query)
-            ds = ctx.search()[0]
-            results = ds.file_context().search()
-
-            if len(results) > 0:
-                logging.info("Found {} {} {} results from ESGF search".format(len(results), experiment_id, var))
-                results = [f.download_url for f in results]
-                break
-
-        if len(results) == 0:
-            logging.warning("NO RESULTS FOUND for {} from ESGF search".format(var))
-        else:
-            cmip6_da = None
-
-            logging.info("\n".join(results))
-
-            try:
-                # http://xarray.pydata.org/en/stable/user-guide/io.html?highlight=opendap#opendap
-                # Avoid 500MB DAP request limit
-                cmip6_da = xr.open_mfdataset(results,
-                                             combine='by_coords',
-                                             chunks={'time': '499MB'}
-                                             )[var]
-
-                cmip6_da = cmip6_da.sel(time=slice(req_dates[0],
-                                                   req_dates[-1]))
-
-                # TODO: possibly other attributes, especially with ocean vars
-                if level:
-                    cmip6_da = cmip6_da.sel(plev=int(level) * 100)
-
-                cmip6_da = cmip6_da.sel(lat=slice(self.dataset.location.bounds[2],
-                                                  self.dataset.location.bounds[0]))
-            except OSError as e:
-                logging.exception("Error encountered: {}".format(e),
-                                  exc_info=False)
-            else:
-                self.save_temporal_files(var_config, cmip6_da)
-                cmip6_da.close()
-
-        self._connection.close()
-
-
 class CMIP6LegacyDownloader(Downloader):
     # Prioritise European first, US last, avoiding unnecessary queries
     # against nodes further afield (all traffic has a cost, and the coverage
     # of local nodes is more than enough)
-    ESGF_NODES = ("esgf.ceda.ac.uk",
+    ESGF_NODES = ("aims3.llnl.gov",
+                  "esgf.ceda.ac.uk",
                   "esg1.umr-cnrm.fr",
                   "vesg.ipsl.upmc.fr",
                   "esgf3.dkrz.de",
@@ -258,18 +150,21 @@ class CMIP6LegacyDownloader(Downloader):
                  exclude_nodes: object = None,
                  search_node: object = "https://esgf-node.llnl.gov/esg-search/search",
                  **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args,
+                         # TODO: validate ESGF frequencies other than MONTH / YEAR
+                         source_min_frequency=Frequency.YEAR,
+                         source_max_frequency=Frequency.HOUR,
+                         **kwargs)
         exclude_nodes = list() if exclude_nodes is None else exclude_nodes
 
         self._search_node = search_node
-        self.__connection = None
+        # self.__connection = None
         self._nodes = nodes if nodes is not None else \
             [n for n in CMIP6LegacyDownloader.ESGF_NODES if n not in exclude_nodes]
 
     def _single_download(self,
                          var_config: object,
-                         req_dates: object,
-                         download_path: object):
+                         req_dates: object) -> list:
         """Overridden CMIP implementation for downloading from DAP server
 
         Due to the size of the CMIP set and the fact that we don't want to make
@@ -278,25 +173,22 @@ class CMIP6LegacyDownloader(Downloader):
 
         :param var_config:
         :param req_dates:
-        :param download_path:
         """
-
-        var, level = var_config.prefix, var_config.level
 
         query = {
             'source_id': self.dataset.source,
             'member_id': self.dataset.member,
-            'frequency': self.dataset.frequency,
-            'variable_id': var,
-            'table_id': self.dataset.table_map[var],
-            'grid_label': self.dataset.grid_map[var],
+            'frequency': self.dataset.frequency.cmip_id,
+            'variable_id': var_config.prefix,
+            'table_id': self.dataset.table_map[var_config.prefix],
+            'grid_label': self.dataset.grid_map[var_config.prefix],
         }
 
         results = []
-        self._connection = SearchConnection(self._search_node, distrib=True)
+        # self._connection = SearchConnection(self._search_node, distrib=True)
 
         for experiment_id in self.dataset.experiments:
-            logging.info("Querying ESGF for experiment {} for {}".format(experiment_id, var))
+            logging.info("Querying ESGF for experiment {} for {}".format(experiment_id, var_config.name))
             query['experiment_id'] = experiment_id
             for data_node in self._nodes:
                 query['data_node'] = data_node
@@ -309,9 +201,12 @@ class CMIP6LegacyDownloader(Downloader):
                     break
 
         if len(results) == 0:
-            logging.warning("NO RESULTS FOUND for {} from ESGF search".format(var))
+            logging.warning("NO RESULTS FOUND for {} from ESGF search".format(var_config.name))
         else:
             cmip6_da = None
+            download_path = os.path.join(var_config.root_path,
+                                         self.dataset.location.name,
+                                         os.path.basename(self.dataset.var_filepath(var_config, req_dates)))
 
             logging.debug("\n".join(results))
 
@@ -321,23 +216,28 @@ class CMIP6LegacyDownloader(Downloader):
                 cmip6_da = xr.open_mfdataset(results,
                                              combine='by_coords',
                                              chunks={'time': '499MB'}
-                                             )[var]
+                                             )[var_config.prefix]
 
                 cmip6_da = cmip6_da.sel(time=slice(req_dates[0],
                                                    req_dates[-1]))
 
                 # TODO: possibly other attributes, especially with ocean vars
-                if level:
-                    cmip6_da = cmip6_da.sel(plev=int(level) * 100)
+                if var_config.level:
+                    cmip6_da = cmip6_da.sel(plev=int(var_config.level) * 100)
 
                 cmip6_da = cmip6_da.sel(lat=slice(self.dataset.location.bounds[2],
                                                   self.dataset.location.bounds[0]))
-            except OSError as e:
-                logging.exception("Error encountered: {}".format(e),
-                                  exc_info=False)
+            except (OSError, ValueError, IndexError) as e:
+                raise DownloaderError("Error encountered: {}".format(e))
             else:
-                self.save_temporal_files(var_config, cmip6_da)
+                logging.info("Writing {} to {}".format(cmip6_da, download_path))
+                os.makedirs(os.path.dirname(download_path))
+                cmip6_da.to_netcdf(download_path)
                 cmip6_da.close()
+
+            if os.path.exists(download_path):
+                return [download_path]
+            return [None]
 
     def esgf_search(self,
                     files_type: str = "OPENDAP",
@@ -418,10 +318,10 @@ def main():
         extra_args=[
             (["--source"], dict(type=str, default="MRI-ESM2-0")),
             (["--member"], dict(type=str, default="r1i1p1f1")),
-            (["--pyesgf"], dict(default=False, action="store_true")),
+            # (["--pyesgf"], dict(default=False, action="store_true")),
             (("-xs", "--exclude-server"),
              dict(default=[], nargs="*")),
-            (("-o", "--override"), dict(required=None, type=str)),
+            # (("-o", "--grid-override"), dict(required=None, type=str)),
             (("-g", "--default-grid"), dict(required=None, type=str)),
         ],
         workers=True
@@ -444,15 +344,15 @@ def main():
         frequency=getattr(Frequency, args.frequency),
     )
 
-    implementation = CMIP6LegacyDownloader if not args.pyesgf else CMIP6PyESGFDownloader
-    downloader = implementation(
+    # implementation = CMIP6LegacyDownloader if not args.pyesgf else CMIP6PyESGFDownloader
+    downloader = CMIP6LegacyDownloader(
         dataset=dataset,
         start_date=args.start_date,
         end_date=args.end_date,
         delete_tempfiles=args.delete,
         max_threads=args.workers,
         exclude_nodes=args.exclude_server,
-        requests_group_by="year",
+        request_frequency=getattr(Frequency, args.output_group_by),
     )
 
     logging.info("CMIP downloading: {} {}".format(args.source, args.member))
