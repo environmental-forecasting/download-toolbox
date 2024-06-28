@@ -171,6 +171,9 @@ class CMIP6LegacyDownloader(Downloader):
         1850-2100 yearly requests for all downloads, we have a bespoke and
         overridden download implementation for this.
 
+        TODO: this could be made to handle much larger date ranges, as individual
+         files contain centuries of data. Making a search / download per year isn't ideal
+
         :param var_config:
         :param req_dates:
         """
@@ -350,7 +353,7 @@ def main():
     )
 
     # implementation = CMIP6LegacyDownloader if not args.pyesgf else CMIP6PyESGFDownloader
-    downloader = CMIP6LegacyDownloader(
+    cmip6 = CMIP6LegacyDownloader(
         dataset=dataset,
         start_date=args.start_date,
         end_date=args.end_date,
@@ -361,4 +364,8 @@ def main():
     )
 
     logging.info("CMIP downloading: {} {}".format(args.source, args.member))
-    downloader.download()
+    cmip6.download()
+    dataset.save_data_for_config(
+        source_files=cmip6.files_downloaded,
+    )
+
