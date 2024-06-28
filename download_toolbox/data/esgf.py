@@ -218,9 +218,13 @@ class CMIP6LegacyDownloader(Downloader):
                                              chunks={'time': '499MB'}
                                              )[var_config.prefix]
 
-                # TODO: We're requesting based on temporal resolution, any need for time selection?
-                # cmip6_da = cmip6_da.sel(time=slice(req_dates[0],
-                #                                    req_dates[-1]))
+                start_date, end_date = req_dates[0], req_dates[-1]
+
+                if self.dataset.frequency == Frequency.MONTH and start_date.day > 1:
+                    start_date = start_date.replace(day=1)
+
+                cmip6_da = cmip6_da.sel(time=slice(start_date,
+                                                   end_date))
 
                 # TODO: possibly other attributes, especially with ocean vars
                 if var_config.level:
