@@ -151,7 +151,7 @@ class DatasetConfig(DataCollection):
             raise DataSetError("Only the following frequencies are valid for request".format(valid_frequencies))
 
         self.config.data.update(dict(
-            var_files={k: list() for k in self._var_names},
+            var_files={k.name: list() for k in self.variables},
             variables=list(self.variables),
         ))
 
