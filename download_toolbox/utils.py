@@ -2,7 +2,6 @@ import datetime as dt
 import logging
 import subprocess as sp
 
-from enum import Flag, auto
 from functools import wraps
 
 import dask

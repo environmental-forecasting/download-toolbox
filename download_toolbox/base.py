@@ -58,7 +58,7 @@ class DataCollection(metaclass=ABCMeta):
                 logging.info("Skipping creation for symlink: {}".format(
                     self._path))
 
-        self._config = Configuration(directory=self.base_path,
+        self._config = Configuration(directory=path,
                                      identifier=self.identifier)
 
     @property
@@ -150,6 +150,11 @@ class DatasetConfig(DataCollection):
         if self._frequency not in valid_frequencies:
             raise DataSetError("Only the following frequencies are valid for request".format(valid_frequencies))
 
+        self.config.data.update(dict(
+            var_files={k: list() for k in self._var_names},
+            variables=list(self.variables),
+        ))
+
     def _get_data_var_folder(self,
                              var: str,
                              root: bool = False,
@@ -233,6 +238,9 @@ class DatasetConfig(DataCollection):
                 ds = ds.assign(dict(time=[pd.Timestamp(d) for d in time_dim_values]))
         else:
             logging.warning("No data provided as data object or source files, not doing anything")
+            if self._overwrite:
+                logging.warning("Overwriting configuration even without data thanks to dataset.overwrite flag")
+                self.save_config()
             return
 
         # Strip out unnecessary / unwanted variables
@@ -325,6 +333,9 @@ class DatasetConfig(DataCollection):
         if len(output_filepaths) == 0:
             logging.warning("No filenames provided for {} - {}".format(var_config, len(date_batch)))
 
+        self.config.data["var_files"][var_config.name] = set(
+            list(self.config.data["var_files"][var_config.name]) + list(output_filepaths)
+        )
         return list(output_filepaths)
 
     @property

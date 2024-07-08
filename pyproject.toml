@@ -72,7 +72,8 @@ dev = [
 ]
 docs = [
   "jinja2",
-  "Sphinx"
+  "Sphinx",
+  "myst_parser"
 ]
 
 [project.urls]

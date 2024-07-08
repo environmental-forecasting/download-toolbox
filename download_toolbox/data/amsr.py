@@ -121,6 +121,7 @@ def main():
         location=location,
         frequency=getattr(Frequency, args.frequency),
         output_group_by=getattr(Frequency, args.output_group_by),
+        overwrite=args.overwrite_config,
     )
 
     sic = AMSRDownloader(

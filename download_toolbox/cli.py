@@ -36,8 +36,8 @@ def dates_arg(string: str) -> object:
     date_match = re.findall(r"(\d{4})-(\d{1,2})-(\d{1,2})", string)
 
     if len(date_match) < 1:
-        raise argparse.ArgumentError("No dates found for supplied argument {}".
-                                     format(string))
+        raise argparse.ArgumentError(argument="dates",
+                                     message="No dates found for supplied argument {}".format(string))
     return [dt.date(*[int(s) for s in date_tuple]) for date_tuple in date_match]
 
 
@@ -130,6 +130,9 @@ def download_args(choices: object = None,
     ap.add_argument("-o", "--output-group-by",
                     choices=freq_avail,
                     default=freq_avail[0])
+    ap.add_argument("-oc", "--overwrite-config",
+                    help="Overwrite dataset configuration",
+                    action="store_true", default=False)
 
     if workers:
         ap.add_argument("-w", "--workers", default=8, type=int)
