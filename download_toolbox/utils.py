@@ -8,12 +8,6 @@ import dask
 from dask.distributed import Client, LocalCluster
 
 
-def json_serialize(x):
-    if isinstance(x, dt.date) or isinstance(x, dt.datetime):
-        return x.isoformat()
-    return str(x)
-
-
 def run_command(command: str, dry: bool = False):
     """Run a shell command
 

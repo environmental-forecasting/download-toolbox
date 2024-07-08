@@ -1,10 +1,9 @@
 import logging
-import json
 import os
 
 from collections import UserDict
 
-from download_toolbox.utils import json_serialize
+import orjson
 
 
 class ConfigurationError(RuntimeError):
@@ -25,9 +24,9 @@ class Configuration(UserDict):
         if os.path.exists(self.output_file):
             logging.info("Loading configuration {}".format(self.output_file))
             with open(self.output_file, "r") as fh:
-                # TODO: json_deserialize
-                obj = json.load(fh)
-                self.data.update(obj["data"])
+                data = fh.read()
+            obj = orjson.loads(data)
+            self.data.update(obj["data"])
 
     def render(self, owner, directory=None):
         if directory is not None:
@@ -42,9 +41,11 @@ class Configuration(UserDict):
         }
 
         logging.info("Writing configuration to {}".format(self.output_file))
+        logging.debug(configuration)
 
+        str_data = orjson.dumps(configuration)
         with open(self.output_file, "w") as fh:
-            json.dump(configuration, fh, indent=4, default=json_serialize)
+            fh.write(str_data.decode())
         return self.output_file
 
     @property

@@ -1,6 +1,7 @@
 import abc
 from abc import abstractmethod, ABCMeta
 import collections
+from dataclasses import dataclass
 import logging
 import os
 import tempfile
@@ -55,11 +56,9 @@ class DataCollection(metaclass=ABCMeta):
                 logging.info("Creating path: {}".format(self._path))
                 os.makedirs(self._path, exist_ok=True)
             else:
-                logging.info("Skipping creation for symlink: {}".format(
-                    self._path))
+                logging.info("Skipping creation for symlink: {}".format(self._path))
 
-        self._config = Configuration(directory=path,
-                                     identifier=self.identifier)
+        self._config = None
 
     @property
     def base_path(self) -> str:
@@ -69,15 +68,17 @@ class DataCollection(metaclass=ABCMeta):
     @base_path.setter
     def base_path(self, path: str) -> None:
         self._path = path
-        self._config.render(path)
+        self.config.render(path)
 
     @property
     def config(self):
+        if self._config is None:
+            self._config = Configuration(directory=self.root_path, identifier=self.identifier)
         return self._config
 
     @staticmethod
     def open_config(config):
-        logging.info("Opening dataset config {}".format(config))
+        logging.info("Opening dataset config")
         raise RuntimeError("This is not yet implemented, get working for preprocess-toolbox!")
 
     @property
@@ -93,10 +94,19 @@ class DataCollection(metaclass=ABCMeta):
         """The identifier (label) for this data collection."""
         return self._identifier
 
+# class VarConfig(collections.namedtuple("VarConfig", ["name", "prefix", "level", "path", "root_path"])):
 
-class VarConfig(collections.namedtuple("VarConfig", ["name", "prefix", "level", "path", "root_path"])):
-    def __repr__(self):
-        return "{} with path {}".format(self.name, self.path)
+
+@dataclass
+class VarConfig:
+    name: str
+    prefix: str
+    level: int
+    path: os.PathLike
+    root_path: os.PathLike
+
+#    def __repr__(self):
+#        return "{} with path {}".format(self.name, self.path)
 
 
 class DatasetConfig(DataCollection):
@@ -150,10 +160,6 @@ class DatasetConfig(DataCollection):
         if self._frequency not in valid_frequencies:
             raise DataSetError("Only the following frequencies are valid for request".format(valid_frequencies))
 
-        self.config.data.update(dict(
-            var_files={k.name: list() for k in self.variables},
-            variables=list(self.variables),
-        ))
 
     def _get_data_var_folder(self,
                              var: str,
@@ -172,8 +178,7 @@ class DatasetConfig(DataCollection):
         if not append:
             append = []
 
-        data_var_path = os.path.join(self.base_path if not root else self.root_path,
-                                     *[var, *append])
+        data_var_path = os.path.join(self.base_path if not root else self.root_path, *[var, *append])
         logging.debug("Handling data var path: {}".format(data_var_path))
 
         if not os.path.exists(data_var_path):
@@ -333,10 +338,14 @@ class DatasetConfig(DataCollection):
         if len(output_filepaths) == 0:
             logging.warning("No filenames provided for {} - {}".format(var_config, len(date_batch)))
 
-        self.config.data["var_files"][var_config.name] = set(
-            list(self.config.data["var_files"][var_config.name]) + list(output_filepaths)
-        )
-        return list(output_filepaths)
+    @property
+    def config(self):
+        if self._config is None:
+            config_ident = ".".join([self.frequency.name.lower(), self.location.name])
+            logging.debug("Creating dataset configuration with {}".format(config_ident))
+            self._config = Configuration(directory=self.root_path,
+                                         identifier=config_ident)
+        return self._config
 
     @property
     def frequency(self):
