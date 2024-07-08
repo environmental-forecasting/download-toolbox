@@ -39,7 +39,7 @@ The library sets up downloaders that will go through the following steps, for a 
 1. Set up a data store or if it exists, read the provenance config
 2. Naively optimise the requested download
 3. Download from the source in parallel
-4. Postprocess data and transform the dataset
+4. Transform the dataset into convenient to use files, ready for processing
 
 That last step is important, as it might result in a different dataset to that which comes from source. The tool is intended to record this in the provenenace configuration, which is why it might exist in step (1), so that new data downloaded is consistent with what's there - as well as the differences from the source data recorded for consistency (you should not be able to screw up existing datasets), posterity and reproducibility. 
 
@@ -49,7 +49,15 @@ There are some major limitations to this as a general purpose tool, these will
 hopefully be dealt with in time! They likely don't have issues related, yet.
 
 * Works only for hemisphere level downloading - north or south. The overhaul for this intends to ensure that identifiers are used so that someone can specify "north" or "south" but equally specify "Norway" or "The Shops" and then provide a geolocation that would identify the dataset within the filesystem.
-* This library does not by default handle any masking (GH#1)
+
+**This is currently very heavy development functionality, but the following downloaders should work**: 
+
+* download_amsr2
+* download_cmip
+* download_era5
+* download_osisaf
+
+Other stubs probably don't work, unless I forgot to update these docs!
 
 ## Contributing 
 
