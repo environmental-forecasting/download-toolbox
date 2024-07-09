@@ -1,21 +1,137 @@
+import abc
 import concurrent
 import logging
-import threading
-from abc import ABCMeta
+from abc import ABCMeta, abstractmethod
 
 from concurrent.futures import ThreadPoolExecutor
 
-from download_toolbox.base import Downloader, DownloaderError
+import pandas as pd
+
 from download_toolbox.data.utils import batch_requested_dates
 
-import ftplib
-from ftplib import FTP
-import requests
-
+from download_toolbox.dataset import DatasetConfig
+from download_toolbox.time import Frequency
 
 """
 
 """
+
+
+class Downloader(metaclass=abc.ABCMeta):
+    """Abstract base class for a downloader.
+
+    Performs operations on DataSets, we handle operations affecting the status of
+    said DatasetConfig:
+        1. Specify date range
+        2. Specify batching behaviours:
+            -
+
+    """
+
+    def __init__(self,
+                 dataset: DatasetConfig,
+                 *args,
+                 delete_tempfiles: bool = True,
+                 download: bool = True,
+                 drop_vars: list = None,
+                 end_date: object,
+                 postprocess: bool = True,
+                 request_frequency: object = Frequency.MONTH,
+                 source_min_frequency: object = Frequency.DAY,
+                 source_max_frequency: object = Frequency.DAY,
+                 start_date: object,
+                 **kwargs):
+        super().__init__()
+
+        self._dates = [pd.to_datetime(date).date() for date in
+                       pd.date_range(start_date, end_date, freq=dataset.frequency.freq)]
+        self._delete = delete_tempfiles
+        self._download = download
+        self._drop_vars = list() if drop_vars is None else drop_vars
+        self._files_downloaded = []
+        self._missing_dates = []
+        self._postprocess = postprocess
+        self._request_frequency = source_min_frequency \
+            if request_frequency < source_min_frequency else source_max_frequency \
+            if request_frequency > source_max_frequency else request_frequency
+        self._source_min_frequency = source_min_frequency
+        self._source_max_frequency = source_max_frequency
+
+        logging.info("Request frequency set to {}".format(self.request_frequency.name))
+
+        self._ds = dataset
+
+        if not self._delete:
+            logging.warning("!!! Deletions of temp files are switched off: be "
+                            "careful with this, you need to manage your "
+                            "files manually")
+
+        self._download_method = self._single_download
+
+    def download(self):
+        """Implements a download for the given dataset
+
+        This method handles download per var-"date batch" for the dataset
+        """
+        for var_config in self.dataset.variables:
+            dates = self.dataset.filter_extant_data(var_config, self.dates)
+
+            for req_date_batch in batch_requested_dates(dates=dates, attribute=self.request_frequency.attribute):
+                logging.info("Processing download for {} with {} dates".
+                             format(var_config.name, len(req_date_batch)))
+                files_downloaded = self._download_method(var_config, req_date_batch)
+
+                if files_downloaded is not None:
+                    logging.info("{} files downloaded".format(len(files_downloaded)))
+                    self._files_downloaded.extend(files_downloaded)
+                else:
+                    logging.warning("Nothing downloaded for {} on batch {}".format(var_config.name, req_date_batch))
+
+    @abstractmethod
+    def _single_download(self,
+                         var_config: object,
+                         req_dates: object) -> list:
+        raise NotImplementedError("_single_download needs an implementation")
+
+    @property
+    def dataset(self):
+        return self._ds
+
+    @property
+    def dates(self):
+        return self._dates
+
+    @property
+    def delete(self):
+        return self._delete
+
+    @property
+    def download_method(self) -> callable:
+        if not self._download_method:
+            raise RuntimeError("Downloader has no method set, "
+                               "implementation error")
+        return self._download_method
+
+    @download_method.setter
+    def download_method(self, method: callable):
+        logging.debug("Setting download_method to {}".format(method))
+        self._download_method = method
+
+    @property
+    def drop_vars(self):
+        return self._drop_vars
+
+    @property
+    def files_downloaded(self):
+        return self._files_downloaded
+
+    @property
+    def missing_dates(self):
+        return self._missing_dates
+
+    @property
+    def request_frequency(self) -> Frequency:
+        return self._request_frequency
 
 
 class ThreadedDownloader(Downloader, metaclass=ABCMeta):
@@ -96,77 +212,5 @@ class ThreadedDownloader(Downloader, metaclass=ABCMeta):
         return self._max_threads
 
 
-class FTPClient(object):
-    def __init__(self,
-                 host: str,
-                 *args,
-                 **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self._ftp = None
-        self._ftp_host = host
-        self._cache = dict()
-        self._ftp_connections = dict()
-
-    def single_request(self,
-                       source_dir: object,
-                       source_filename: list,
-                       destination_path: object):
-        thread_id = threading.get_native_id()
-        if threading.get_native_id() not in self._ftp_connections:
-            logging.debug("FTP opening for thread {}".format(thread_id))
-            self._ftp_connections[thread_id] = FTP(self._ftp_host)
-            ftp_connection = self._ftp_connections[thread_id]
-            ftp_connection.login()
-        else:
-            ftp_connection = self._ftp_connections[thread_id]
-
-        try:
-            logging.debug("FTP changing to {}".format(source_dir))
-            # self._ftp.cwd(source_dir)
-
-            if source_dir not in self._cache:
-                self._cache[source_dir] = ftp_connection.nlst(source_dir)
-
-            ftp_files = [el for el in self._cache[source_dir] if el.endswith(source_filename)]
-            if not len(ftp_files):
-                raise DownloaderError("File is not available: {}".format(source_filename))
-        except ftplib.error_perm as e:
-            raise DownloaderError("FTP error, possibly missing directory {}: {}".format(source_dir, e))
-
-        logging.debug("FTP Attempting to retrieve to {} from {}".format(destination_path, ftp_files[0]))
-        with open(destination_path, "wb") as fh:
-            ftp_connection.retrbinary("RETR {}".format(ftp_files[0]), fh.write)
-
-
-class HTTPClient(object):
-    def __init__(self,
-                 host: str,
-                 *args,
-                 source_base: object = None,
-                 **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self._host = host
-        self._source_base = source_base
-
-    def single_request(self,
-                       source: object,
-                       destination_path: object,
-                       method: str = "get",
-                       request_options: dict = None):
-        request_options = dict() if request_options is None else request_options
-        source_url = "/".join([self._host, self._source_base, source])
-
-        try:
-            logging.debug("{}-ing {} with {}".format(method, source_url, request_options))
-            response = getattr(requests, method)(source_url, **request_options)
-        except requests.exceptions.RequestException as e:
-            raise DownloaderError("HTTP error {}: {}".format(source_url, e))
-
-        if hasattr(response, "status_code") and response.status_code == 200:
-            logging.debug("Attempting to output response content to {}".format(destination_path))
-            with open(destination_path, "wb") as fh:
-                fh.write(response.content)
-        else:
-            raise DownloaderError("HTTP response was not successful, writing nothing: {}".format(response.status_code))
+class DownloaderError(RuntimeError):
+    pass

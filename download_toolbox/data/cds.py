@@ -7,7 +7,7 @@ import os
 import cdsapi as cds
 import xarray as xr
 
-from download_toolbox.base import DatasetConfig
+from download_toolbox.dataset import DatasetConfig
 from download_toolbox.cli import download_args
 from download_toolbox.download import ThreadedDownloader, DownloaderError
 from download_toolbox.location import Location

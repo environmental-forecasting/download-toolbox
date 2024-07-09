@@ -35,7 +35,7 @@ class Configuration(UserDict):
             self.directory = directory
 
         configuration = {
-            "data": self.data,
+            "data": owner.get_config(),
             "history": self._history,
             "implementation": owner.__class__.__name__,
         }

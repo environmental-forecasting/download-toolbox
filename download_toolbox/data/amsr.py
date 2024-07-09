@@ -3,9 +3,10 @@ import os
 
 import datetime as dt
 
-from download_toolbox.base import DatasetConfig, DataSetError, DownloaderError
+from download_toolbox.dataset import DatasetConfig, DataSetError
 from download_toolbox.cli import download_args
-from download_toolbox.download import ThreadedDownloader, HTTPClient
+from download_toolbox.download import ThreadedDownloader, DownloaderError
+from download_toolbox.utils import HTTPClient
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
 

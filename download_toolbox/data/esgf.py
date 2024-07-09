@@ -10,9 +10,9 @@ import xarray as xr
 from pyesgf.search import SearchConnection
 from pyesgf.logon import LogonManager
 
-from download_toolbox.base import DatasetConfig, Downloader, DataSetError, DownloaderError
+from download_toolbox.dataset import DatasetConfig, DataSetError
 from download_toolbox.cli import download_args
-from download_toolbox.download import ThreadedDownloader
+from download_toolbox.download import ThreadedDownloader, Downloader, DownloaderError
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
 

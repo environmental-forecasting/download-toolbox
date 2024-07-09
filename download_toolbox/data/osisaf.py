@@ -4,9 +4,10 @@ import os
 
 import pandas as pd
 
-from download_toolbox.base import DatasetConfig, DownloaderError
+from download_toolbox.dataset import DatasetConfig
 from download_toolbox.cli import download_args
-from download_toolbox.download import ThreadedDownloader, FTPClient
+from download_toolbox.download import ThreadedDownloader, DownloaderError
+from download_toolbox.utils import FTPClient
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
 

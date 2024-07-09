@@ -1,11 +1,17 @@
 import datetime as dt
+import ftplib
 import logging
 import subprocess as sp
+import threading
+from ftplib import FTP
 
 from functools import wraps
 
 import dask
+import requests
 from dask.distributed import Client, LocalCluster
+
+from download_toolbox.download import DownloaderError
 
 
 def run_command(command: str, dry: bool = False):
@@ -105,3 +111,79 @@ class DaskWrapper:
                 logging.info("Using dask client {}".format(client))
                 ret = method(*args, **kwargs)
         return ret
+
+
+class FTPClient(object):
+    def __init__(self,
+                 host: str,
+                 *args,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self._ftp = None
+        self._ftp_host = host
+        self._cache = dict()
+        self._ftp_connections = dict()
+
+    def single_request(self,
+                       source_dir: object,
+                       source_filename: list,
+                       destination_path: object):
+        thread_id = threading.get_native_id()
+        if threading.get_native_id() not in self._ftp_connections:
+            logging.debug("FTP opening for thread {}".format(thread_id))
+            self._ftp_connections[thread_id] = FTP(self._ftp_host)
+            ftp_connection = self._ftp_connections[thread_id]
+            ftp_connection.login()
+        else:
+            ftp_connection = self._ftp_connections[thread_id]
+
+        try:
+            logging.debug("FTP changing to {}".format(source_dir))
+            # self._ftp.cwd(source_dir)
+
+            if source_dir not in self._cache:
+                self._cache[source_dir] = ftp_connection.nlst(source_dir)
+
+            ftp_files = [el for el in self._cache[source_dir] if el.endswith(source_filename)]
+            if not len(ftp_files):
+                raise DownloaderError("File is not available: {}".format(source_filename))
+        except ftplib.error_perm as e:
+            raise DownloaderError("FTP error, possibly missing directory {}: {}".format(source_dir, e))
+
+        logging.debug("FTP Attempting to retrieve to {} from {}".format(destination_path, ftp_files[0]))
+        with open(destination_path, "wb") as fh:
+            ftp_connection.retrbinary("RETR {}".format(ftp_files[0]), fh.write)
+
+
+class HTTPClient(object):
+    def __init__(self,
+                 host: str,
+                 *args,
+                 source_base: object = None,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self._host = host
+        self._source_base = source_base
+
+    def single_request(self,
+                       source: object,
+                       destination_path: object,
+                       method: str = "get",
+                       request_options: dict = None):
+        request_options = dict() if request_options is None else request_options
+        source_url = "/".join([self._host, self._source_base, source])
+
+        try:
+            logging.debug("{}-ing {} with {}".format(method, source_url, request_options))
+            response = getattr(requests, method)(source_url, **request_options)
+        except requests.exceptions.RequestException as e:
+            raise DownloaderError("HTTP error {}: {}".format(source_url, e))
+
+        if hasattr(response, "status_code") and response.status_code == 200:
+            logging.debug("Attempting to output response content to {}".format(destination_path))
+            with open(destination_path, "wb") as fh:
+                fh.write(response.content)
+        else:
+            raise DownloaderError("HTTP response was not successful, writing nothing: {}".format(response.status_code))
