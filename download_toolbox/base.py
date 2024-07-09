@@ -70,8 +70,10 @@ class DataCollection(metaclass=ABCMeta):
     def path(self, path: str) -> None:
         self._path = path
 
-    def get_config(self):
-        return {k: v for k, v in self.__dict__.items() if k not in ["_config"]}
+    def get_config(self,
+                   config_funcs: dict = None):
+        return {k: config_funcs[k](v) if config_funcs is not None and k in config_funcs else v
+                for k, v in self.__dict__.items() if k not in ["_config"]}
 
     @property
     def root_path(self):
