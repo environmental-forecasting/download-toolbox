@@ -302,12 +302,14 @@ class DatasetConfig(DataCollection):
 
     def get_config(self,
                    config_funcs: dict = None):
-        return super().get_config(config_funcs=dict(
+        my_funcs = dict(
             _frequency=lambda x: x.name,
             _location=lambda x: dict(name=x.name, bounds=x.bounds)
             if not x.north and not x.south else dict(name=x.name, north=x.north, south=x.south),
             _output_group_by=lambda x: x.name,
-        ))
+        )
+        config_funcs = {} if config_funcs is None else config_funcs
+        return super().get_config(config_funcs={**my_funcs, **config_funcs})
 
     @property
     def frequency(self):
