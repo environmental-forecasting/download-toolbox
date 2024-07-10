@@ -1,10 +1,7 @@
 import argparse
-import collections
 import datetime as dt
-import logging
 import re
 
-import pandas as pd
 
 from download_toolbox.time import Frequency
 from download_toolbox.utils import setup_logging

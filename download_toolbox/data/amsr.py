@@ -16,8 +16,10 @@ var_remove_list = ["polar_stereographic", "land"]
 
 class AMSRDatasetConfig(DatasetConfig):
     def __init__(self,
-                 *args,
+                 identifier=None,
+                 levels=None,
                  resolution=6.25,
+                 var_names=None,
                  **kwargs):
         # There are other resolutions available, this will need updating for more
         # products, such as 1km AMSR+MODIS
@@ -26,10 +28,10 @@ class AMSRDatasetConfig(DatasetConfig):
 
         self._resolution = resolution
 
-        super().__init__(*args,
-                         identifier="amsr2_{:1.3f}".format(resolution).replace(".", ""),
-                         var_names=["siconca"],
-                         levels=[None],
+        super().__init__(identifier="amsr2_{:1.3f}".format(resolution).replace(".", "")
+                         if identifier is None else identifier,
+                         var_names=["siconca"] if var_names is None else var_names,
+                         levels=[None] if levels is None else levels,
                          **kwargs)
 
     @property

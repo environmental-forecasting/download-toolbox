@@ -196,12 +196,8 @@ var_remove_list = ['time_bnds', 'raw_ice_conc_values', 'total_standard_error',
 
 
 class SICDatasetConfig(DatasetConfig):
-    def __init__(self,
-                 *args,
-                 **kwargs):
-
-        super().__init__(*args,
-                         identifier="osisaf",
+    def __init__(self, **kwargs):
+        super().__init__(identifier="osisaf",
                          var_names=["siconca"],
                          levels=[None],
                          **kwargs)

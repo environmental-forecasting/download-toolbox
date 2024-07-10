@@ -8,7 +8,6 @@ from pprint import pformat
 import pandas as pd
 import xarray as xr
 
-import download_toolbox.data
 from download_toolbox.base import DataCollection
 from download_toolbox.config import Configuration
 from download_toolbox.data.utils import merge_files
@@ -22,37 +21,6 @@ class VarConfig:
     level: int
     path: os.PathLike
     root_path: os.PathLike
-
-
-class DataSetFactory(object):
-    @classmethod
-    def get_item(cls, impl):
-        klass_name = DataSetFactory.get_klass_name(impl)
-
-        if hasattr(download_toolbox.data, klass_name):
-            return getattr(download_toolbox.data, klass_name)
-
-        logging.error("No class named {0} found in download_toolbox.data".format(klass_name))
-        raise ReferenceError
-
-    @classmethod
-    def get_klass_name(cls, name):
-        return name.split(":")[-1]
-
-
-def get_dataset_implementation(config: os.PathLike):
-    if not str(config).endswith(".json"):
-        raise RuntimeError("{} does not look like a JSON configuration".format(config))
-    if not os.path.exists(config):
-        raise RuntimeError("{} is not a configuration in existence".format(config))
-
-    logging.debug("Retrieving implementations details from {}".format(config))
-
-    with open(config) as fh:
-        cfg = json.load(fh)
-
-    logging.debug("Attempting to instantiate {} with {}".format(cfg["implementation"], cfg["data"]))
-    return DataSetFactory.get_item(cfg["implementation"]).open_config(cfg["data"])
 
 
 class DatasetConfig(DataCollection):
@@ -72,7 +40,7 @@ class DatasetConfig(DataCollection):
     """
 
     def __init__(self,
-                 *args,
+                 *,
                  frequency: object = Frequency.DAY,
                  levels: object = (),
                  location: object,
@@ -82,8 +50,7 @@ class DatasetConfig(DataCollection):
                  valid_frequencies: tuple = (Frequency.DAY, Frequency.MONTH),
                  var_names: object = (),
                  **kwargs) -> None:
-        super(DatasetConfig, self).__init__(*args,
-                                            path_components=[frequency.name.lower(), location.name],
+        super(DatasetConfig, self).__init__(path_components=[frequency.name.lower(), location.name],
                                             **kwargs)
 
         self._frequency = frequency
@@ -301,15 +268,20 @@ class DatasetConfig(DataCollection):
         return self._config
 
     def get_config(self,
-                   config_funcs: dict = None):
+                   config_funcs: dict = None,
+                   strip_keys: list = None):
+        my_keys = ["_overwrite"]
         my_funcs = dict(
             _frequency=lambda x: x.name,
             _location=lambda x: dict(name=x.name, bounds=x.bounds)
             if not x.north and not x.south else dict(name=x.name, north=x.north, south=x.south),
             _output_group_by=lambda x: x.name,
         )
+
         config_funcs = {} if config_funcs is None else config_funcs
-        return super().get_config(config_funcs={**my_funcs, **config_funcs})
+        strip_keys = my_keys if strip_keys is None else my_keys.extend(strip_keys)
+        return super().get_config(config_funcs={**my_funcs, **config_funcs},
+                                  strip_keys=strip_keys)
 
     @property
     def frequency(self):

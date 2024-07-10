@@ -71,9 +71,9 @@ class CMIP6DatasetConfig(DatasetConfig):
         'ua': 'gn',
     }
 
-    def __init__(self, *args,
-                 source,
-                 member,
+    def __init__(self,
+                 source: str,
+                 member: str,
                  experiments: object = (
                     "historical",
                     "ssp245",
@@ -83,8 +83,7 @@ class CMIP6DatasetConfig(DatasetConfig):
                  identifier=None,
                  table_map_override: object = None,
                  **kwargs):
-        super().__init__(*args,
-                         identifier="cmip6.{}.{}".format(source, member)
+        super().__init__(identifier="cmip6.{}.{}".format(source, member)
                          if identifier is None else identifier,
                          **kwargs)
 

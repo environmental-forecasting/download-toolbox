@@ -28,19 +28,17 @@ class ERA5DatasetConfig(DatasetConfig):
         'vas': '10m_v_component_of_wind',
     }
 
-    def __init__(self, *args,
-                 identifier=None,
-                 cdi_map_override: object = None,
+    def __init__(self,
+                 identifier: str = None,
+                 cdi_map: object = None,
                  **kwargs):
-        super().__init__(*args,
-                         identifier="era5"
+        super().__init__(identifier="era5"
                          if identifier is None else identifier,
                          **kwargs)
 
         self._cdi_map = ERA5DatasetConfig.CDI_MAP
-        if cdi_map_override is not None:
-            # self._cdi_map = {k: cdi_map_override for k in ERA5DatasetConfig.CDI_MAP.keys()}
-            self._cdi_map.update(cdi_map_override)
+        if cdi_map is not None:
+            self._cdi_map.update(cdi_map)
 
     @property
     def cdi_map(self):
