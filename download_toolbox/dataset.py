@@ -5,6 +5,7 @@ import tempfile
 from dataclasses import dataclass
 from pprint import pformat
 
+import dask
 import pandas as pd
 import xarray as xr
 
@@ -46,11 +47,14 @@ class DatasetConfig(DataCollection):
                  location: object,
                  output_group_by: object = Frequency.YEAR,
                  overwrite: bool = False,
+                 path_components: list = None,
                  # TODO: Perhaps review the implementation with Enum to a bitwise typed one @ Py3.9+
                  valid_frequencies: tuple = (Frequency.DAY, Frequency.MONTH),
+                 var_files: dict = None,
                  var_names: object = (),
                  **kwargs) -> None:
-        super(DatasetConfig, self).__init__(path_components=[frequency.name.lower(), location.name],
+        super(DatasetConfig, self).__init__(path_components=[frequency.name.lower(), location.name]
+                                            if path_components is None else path_components,
                                             **kwargs)
 
         self._frequency = frequency
@@ -58,6 +62,7 @@ class DatasetConfig(DataCollection):
         self._location = location
         self._output_group_by = output_group_by
         self._overwrite = overwrite
+        self._var_files = dict() if var_files is None else var_files
         self._var_names = list(var_names)
 
         if len(self._var_names) < 1:
@@ -126,6 +131,45 @@ class DatasetConfig(DataCollection):
             extant_ds.close()
             logging.debug("{} dates filtered down to {} dates".format(len(dates), len(dt_arr)))
         return dt_arr
+
+    def get_config(self,
+                   config_funcs: dict = None,
+                   strip_keys: list = None):
+        my_keys = ["_overwrite"]
+        my_funcs = dict(
+            _frequency=lambda x: x.name,
+            _location=lambda x: dict(name=x.name, bounds=x.bounds)
+            if not x.north and not x.south else dict(name=x.name, north=x.north, south=x.south),
+            _output_group_by=lambda x: x.name,
+        )
+
+        config_funcs = {} if config_funcs is None else config_funcs
+        strip_keys = my_keys if strip_keys is None else my_keys.extend(strip_keys)
+        return super().get_config(config_funcs={**my_funcs, **config_funcs},
+                                  strip_keys=strip_keys)
+
+    def get_dataset(self,
+                    var_names: list = None):
+        if var_names is None:
+            logging.debug(self.variables)
+            var_names = [v.name for v in self.variables]
+
+        logging.debug("Finding files for {}".format(", ".join(var_names)))
+        var_files = [var_filepaths
+                     for vn in var_names
+                     for var_filepaths in self.var_files[vn]]
+        logging.info("Got {} filenames to open dataset with!".format(len(var_files)))
+        logging.debug(pformat(var_files))
+
+        # TODO: where's my parallel mfdataset please!?
+        with dask.config.set(**{'array.slicing.split_large_chunks': True}):
+            ds = xr.open_mfdataset(
+                var_files,
+                combine="nested",
+                concat_dim="time",
+                coords="minimal",
+                compat="override")
+        return ds
 
     def save_data_for_config(self,
                              rename_var_list: dict = None,
@@ -250,9 +294,9 @@ class DatasetConfig(DataCollection):
         if len(output_filepaths) == 0:
             logging.warning("No filenames provided for {} - {}".format(var_config, len(date_batch)))
 
-        # self.config.data["var_files"][var_config.name] = list(set(
-        #     self.config.data["var_files"][var_config.name] + output_filepaths
-        # ))
+        self._var_files[var_config.name] = list(set(
+            self._var_files[var_config.name] + output_filepaths
+        )) if var_config.name in self._var_files else output_filepaths
 
         return output_filepaths
 
@@ -266,22 +310,6 @@ class DatasetConfig(DataCollection):
             self._config = Configuration(directory=self.root_path,
                                          identifier=config_ident)
         return self._config
-
-    def get_config(self,
-                   config_funcs: dict = None,
-                   strip_keys: list = None):
-        my_keys = ["_overwrite"]
-        my_funcs = dict(
-            _frequency=lambda x: x.name,
-            _location=lambda x: dict(name=x.name, bounds=x.bounds)
-            if not x.north and not x.south else dict(name=x.name, north=x.north, south=x.south),
-            _output_group_by=lambda x: x.name,
-        )
-
-        config_funcs = {} if config_funcs is None else config_funcs
-        strip_keys = my_keys if strip_keys is None else my_keys.extend(strip_keys)
-        return super().get_config(config_funcs={**my_funcs, **config_funcs},
-                                  strip_keys=strip_keys)
 
     @property
     def frequency(self):
@@ -298,6 +326,10 @@ class DatasetConfig(DataCollection):
                 var_config = self.var_config(var_name, level)
                 # logging.debug("Returning configuration: {}".format(var_config))
                 yield var_config
+
+    @property
+    def var_files(self):
+        return self._var_files
 
 
 class DataSetError(RuntimeError):

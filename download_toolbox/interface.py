@@ -24,7 +24,7 @@ class DataSetFactory(object):
         return name.split(":")[-1]
 
 
-def get_dataset_implementation(config: os.PathLike):
+def get_dataset_config_implementation(config: os.PathLike):
     if not str(config).endswith(".json"):
         raise RuntimeError("{} does not look like a JSON configuration".format(config))
     if not os.path.exists(config):

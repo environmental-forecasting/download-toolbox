@@ -52,15 +52,15 @@ class Configuration(UserDict):
     def directory(self):
         return self._directory
 
-    @property
-    def identifier(self):
-        return self._identifier
-
     @directory.setter
     def directory(self, directory):
         if not os.path.isdir(directory):
             raise RuntimeError("Path {} is invalid, needs to be a directory".format(directory))
         self._directory = directory
+
+    @property
+    def identifier(self):
+        return self._identifier
 
     @property
     def output_file(self):

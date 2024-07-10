@@ -23,16 +23,18 @@ class DataCollection(metaclass=ABCMeta):
     def __init__(self,
                  *,
                  identifier: str,
-                 path: str = os.path.join(".", "data"),
-                 path_components: object = None) -> None:
+                 base_path: str = os.path.join(".", "data"),
+                 path_components: list = None) -> None:
         self._identifier = identifier
 
         path_components = list() if path_components is None else path_components
         if not isinstance(path_components, list):
             raise DataCollectionError("path_components should be an Iterator")
-        self._base_path = path
-        self._path = os.path.join(path, identifier, *path_components)
-        self._root_path = os.path.join(path, identifier)
+
+        self._base_path = base_path
+        self._root_path = os.path.join(base_path, identifier)
+        self._path = os.path.join(self._root_path, *path_components)
+        self._path_components = path_components
 
         if self._identifier is None:
             raise DataCollectionError("No identifier supplied")
@@ -54,6 +56,10 @@ class DataCollection(metaclass=ABCMeta):
             self._config = Configuration(directory=self.root_path, identifier=self.identifier)
         return self._config
 
+    @property
+    def config_file(self):
+        return self.config.output_file
+
 #    @staticmethod
 #    def create_instance(config):
 #        logging.info("Opening dataset config {}".format(config))
@@ -74,7 +80,7 @@ class DataCollection(metaclass=ABCMeta):
                    strip_keys: list = None):
         strip_keys = [] if strip_keys is None else strip_keys
         return {k: config_funcs[k](v) if config_funcs is not None and k in config_funcs else v
-                for k, v in self.__dict__.items() if k not in ["_base_path", "_config", "_root_path"] + strip_keys}
+                for k, v in self.__dict__.items() if k not in ["_path", "_config", "_root_path"] + strip_keys}
 
     @property
     def root_path(self):
