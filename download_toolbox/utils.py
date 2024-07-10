@@ -11,8 +11,6 @@ import dask
 import requests
 from dask.distributed import Client, LocalCluster
 
-from download_toolbox.download import DownloaderError
-
 
 def run_command(command: str, dry: bool = False):
     """Run a shell command
@@ -147,9 +145,9 @@ class FTPClient(object):
 
             ftp_files = [el for el in self._cache[source_dir] if el.endswith(source_filename)]
             if not len(ftp_files):
-                raise DownloaderError("File is not available: {}".format(source_filename))
+                raise ClientError("File is not available: {}".format(source_filename))
         except ftplib.error_perm as e:
-            raise DownloaderError("FTP error, possibly missing directory {}: {}".format(source_dir, e))
+            raise ClientError("FTP error, possibly missing directory {}: {}".format(source_dir, e))
 
         logging.debug("FTP Attempting to retrieve to {} from {}".format(destination_path, ftp_files[0]))
         with open(destination_path, "wb") as fh:
@@ -179,11 +177,15 @@ class HTTPClient(object):
             logging.debug("{}-ing {} with {}".format(method, source_url, request_options))
             response = getattr(requests, method)(source_url, **request_options)
         except requests.exceptions.RequestException as e:
-            raise DownloaderError("HTTP error {}: {}".format(source_url, e))
+            raise ClientError("HTTP error {}: {}".format(source_url, e))
 
         if hasattr(response, "status_code") and response.status_code == 200:
             logging.debug("Attempting to output response content to {}".format(destination_path))
             with open(destination_path, "wb") as fh:
                 fh.write(response.content)
         else:
-            raise DownloaderError("HTTP response was not successful, writing nothing: {}".format(response.status_code))
+            raise ClientError("HTTP response was not successful, writing nothing: {}".format(response.status_code))
+
+
+class ClientError(RuntimeError):
+    pass
