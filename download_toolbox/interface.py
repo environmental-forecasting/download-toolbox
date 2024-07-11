@@ -1,20 +1,37 @@
 import logging
 import os
+import sys
 
 import orjson
 
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
 
+from download_toolbox.data.amsr import AMSRDatasetConfig
+from download_toolbox.data.cds import ERA5DatasetConfig
+from download_toolbox.data.esgf import CMIP6DatasetConfig
+from download_toolbox.data.osisaf import SICDatasetConfig
+
+__all__ = [
+    "AMSRDatasetConfig",
+    "ERA5DatasetConfig",
+    "CMIP6DatasetConfig",
+    "SICDatasetConfig",
+    # Functions
+    "get_dataset_config_implementation",
+]
+
 
 class DataSetFactory(object):
     @classmethod
     def get_item(cls, impl):
-        import download_toolbox.data
         klass_name = DataSetFactory.get_klass_name(impl)
 
-        if hasattr(download_toolbox.data, klass_name):
-            return getattr(download_toolbox.data, klass_name)
+        # This looks weird, but to avoid circular imports it helps to isolate implementations
+        # herein, so that dependent libraries can more easily import functionality without
+        # accidentally importing everything through download_toolbox.data
+        if hasattr(sys.modules[__name__], klass_name):
+            return getattr(sys.modules[__name__], klass_name)
 
         logging.error("No class named {0} found in download_toolbox.data".format(klass_name))
         raise ReferenceError
