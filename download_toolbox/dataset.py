@@ -331,6 +331,9 @@ class DatasetConfig(DataCollection):
     def var_files(self):
         return self._var_files
 
+    def __repr__(self):
+        return pformat(self.__dict__)
+
 
 class DataSetError(RuntimeError):
     pass
