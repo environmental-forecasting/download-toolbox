@@ -1,6 +1,7 @@
 from abc import abstractmethod, ABCMeta
 import logging
 import os
+import shutil
 
 from download_toolbox.config import Configuration
 
@@ -32,9 +33,17 @@ class DataCollection(metaclass=ABCMeta):
             raise DataCollectionError("path_components should be an Iterator")
 
         self._base_path = base_path
-        self._root_path = os.path.join(base_path, identifier)
-        self._path = os.path.join(self._root_path, *path_components)
         self._path_components = path_components
+        self._root_path = None
+        self._path = None
+        self._config = None
+
+        self.init()
+
+    def init(self):
+        self._config = None
+        self._root_path = os.path.join(self._base_path, self._identifier)
+        self._path = os.path.join(self._root_path, *self._path_components)
 
         if self._identifier is None:
             raise DataCollectionError("No identifier supplied")
@@ -48,7 +57,12 @@ class DataCollection(metaclass=ABCMeta):
             else:
                 logging.info("Skipping creation for symlink: {}".format(self._path))
 
-        self._config = None
+    def copy_to(self, new_identifier):
+        old_path = self.path
+        self.identifier = new_identifier
+
+        logging.info("Copying {} to {}".format(old_path, self.path))
+        shutil.copytree(old_path, self.path, dirs_exist_ok=True)
 
     @property
     def config(self):
@@ -94,6 +108,11 @@ class DataCollection(metaclass=ABCMeta):
     def identifier(self) -> str:
         """The identifier (label) for this data collection."""
         return self._identifier
+
+    @identifier.setter
+    def identifier(self, identifier: str) -> None:
+        self._identifier = identifier
+        self.init()
 
 
 #    def __repr__(self):

@@ -107,6 +107,15 @@ class DatasetConfig(DataCollection):
 
         return data_var_path
 
+    def copy_to(self, new_identifier):
+        old_path = self.path
+        super().copy_to(new_identifier)
+        logging.info("Applying copy_to to identifier {}".format(new_identifier))
+
+        for var_name in self.var_files.keys():
+            self.var_files[var_name] = [var_file.replace(old_path, self.path)
+                                        for var_file in self.var_files[var_name]]
+
     def filter_extant_data(self,
                            var_config: VarConfig,
                            dates: list) -> list:
@@ -180,7 +189,7 @@ class DatasetConfig(DataCollection):
         # Check whether we have a valid source
         ds = None
         if type(source_ds) in [xr.Dataset, xr.DataArray]:
-            ds = source_ds if type(source_ds) is xr.DataArray else source_ds.to_dataset()
+            ds = source_ds if type(source_ds) is xr.Dataset else source_ds.to_dataset()
 
             if source_files is not None:
                 raise RuntimeError("Not able to combine sources in save_dataset at present")
@@ -224,7 +233,7 @@ class DatasetConfig(DataCollection):
         for var_config in [vc for vc in self.variables if vc.name in ds.data_vars]:
             da = getattr(ds, var_config.name)
             logging.debug("Resampling to period 1{}: {}".format(self.frequency.freq, da))
-            da = da.resample(time="1{}".format(self.frequency.freq)).mean()
+            da = da.sortby("time").resample(time="1{}".format(self.frequency.freq)).mean()
 
             logging.debug("Grouping {} by {}".format(var_config, group_by))
             for dt, dt_da in da.groupby(group_by):
