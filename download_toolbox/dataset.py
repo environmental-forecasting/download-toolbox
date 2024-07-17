@@ -177,7 +177,8 @@ class DatasetConfig(DataCollection):
                 combine="nested",
                 concat_dim="time",
                 coords="minimal",
-                compat="override")
+                compat="override"
+            ).drop_duplicates("time").chunk(dict(time=1, ))
         return ds
 
     def save_data_for_config(self,
@@ -233,7 +234,7 @@ class DatasetConfig(DataCollection):
         for var_config in [vc for vc in self.variables if vc.name in ds.data_vars]:
             da = getattr(ds, var_config.name)
             logging.debug("Resampling to period 1{}: {}".format(self.frequency.freq, da))
-            da = da.sortby("time").resample(time="1{}".format(self.frequency.freq)).mean()
+            da = da.sortby("time").resample(time="1{}".format(self.frequency.freq)).mean(keep_attrs=True)
 
             logging.debug("Grouping {} by {}".format(var_config, group_by))
             for dt, dt_da in da.groupby(group_by):

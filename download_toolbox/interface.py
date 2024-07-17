@@ -4,6 +4,7 @@ import sys
 
 import orjson
 
+from download_toolbox.dataset import DatasetConfig
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
 
@@ -13,10 +14,14 @@ from download_toolbox.data.esgf import CMIP6DatasetConfig
 from download_toolbox.data.osisaf import SICDatasetConfig
 
 __all__ = [
+    "DatasetConfig",
     "AMSRDatasetConfig",
     "ERA5DatasetConfig",
     "CMIP6DatasetConfig",
     "SICDatasetConfig",
+    # Descriptions
+    "Frequency",
+    "Location",
     # Functions
     "get_dataset_config_implementation",
 ]
