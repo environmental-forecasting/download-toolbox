@@ -76,7 +76,7 @@ class DatasetConfig(DataCollection):
                                format(self._output_group_by.name, self._frequency.name))
 
         if self._frequency not in valid_frequencies:
-            raise DataSetError("Only the following frequencies are valid for request".format(valid_frequencies))
+            raise DataSetError("Only the following frequencies are valid for request: {}".format(valid_frequencies))
 
     def _get_data_var_folder(self,
                              var: str,
@@ -242,20 +242,24 @@ class DatasetConfig(DataCollection):
                 logging.debug(req_dates)
                 destination_path = self.var_filepath(var_config, req_dates)
 
+                copy_attrs = {k: v for k, v in ds.attrs.items() if k.startswith("geospatial")}
+                logging.debug("Reassinging geospatial info to derived dataset: {}".format(copy_attrs))
+                dt_ds = dt_da.to_dataset().assign_attrs(copy_attrs)
+
                 # If exists, merge and concatenate the data to destination (overwrite?) at output_group_by
                 if os.path.exists(destination_path):
                     fh, temporary_name = tempfile.mkstemp(dir=".")
                     os.close(fh)
-                    dt_da.to_netcdf(temporary_name)
-                    dt_da.close()
+                    dt_ds.to_netcdf(temporary_name)
+                    dt_ds.close()
                     logging.info("Written new data to {} and merging with {}".format(
                         temporary_name, destination_path
                     ))
                     merge_files(destination_path, temporary_name)
                 else:
                     logging.info("Saving {}".format(destination_path))
-                    dt_da.to_netcdf(destination_path)
-                    dt_da.close()
+                    dt_ds.to_netcdf(destination_path)
+                    dt_ds.close()
 
         # Write out the configuration file
         self.save_config()

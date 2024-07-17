@@ -21,6 +21,7 @@ dependencies = [
     "esgf-pyclient",
     "motuclient",
     "orjson",
+    "pandas",
     "pip",
     "pydap",
     "setuptools",
