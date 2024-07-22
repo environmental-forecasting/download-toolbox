@@ -11,12 +11,17 @@ class ConfigurationError(RuntimeError):
 
 
 class Configuration(UserDict):
-    def __init__(self, directory, identifier, **kwargs):
+    def __init__(self,
+                 directory,
+                 identifier,
+                 host: str = "download_toolbox",
+                 **kwargs):
         super().__init__(kwargs)
 
         self._directory = directory
         self._identifier = identifier
         self._history = []
+        self._host = host
 
         self._load_existing()
 
@@ -64,4 +69,4 @@ class Configuration(UserDict):
 
     @property
     def output_file(self):
-        return os.path.join(self.directory, "download_toolbox.{}.json".format(self.identifier))
+        return os.path.join(self.directory, "{}.{}.json".format(self._host, self.identifier))

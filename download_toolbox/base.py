@@ -67,7 +67,8 @@ class DataCollection(metaclass=ABCMeta):
     @property
     def config(self):
         if self._config is None:
-            self._config = Configuration(directory=self.root_path, identifier=self.identifier)
+            self._config = Configuration(directory=self.root_path,
+                                         identifier=self.identifier)
         return self._config
 
     @property
