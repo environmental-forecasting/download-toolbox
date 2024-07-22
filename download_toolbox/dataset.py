@@ -53,7 +53,8 @@ class DatasetConfig(DataCollection):
                  var_files: dict = None,
                  var_names: object = (),
                  **kwargs) -> None:
-        super(DatasetConfig, self).__init__(path_components=[frequency.name.lower(), location.name]
+        super(DatasetConfig, self).__init__(config_type="dataset_config",
+                                            path_components=[frequency.name.lower(), location.name]
                                             if path_components is None else path_components,
                                             **kwargs)
 
@@ -321,7 +322,8 @@ class DatasetConfig(DataCollection):
             config_ident = ".".join([self.frequency.name.lower(), self.location.name])
 
             logging.debug("Creating dataset configuration with {}".format(config_ident))
-            self._config = Configuration(directory=self.root_path,
+            self._config = Configuration(config_type=self._config_type,
+                                         directory=self.root_path,
                                          identifier=config_ident)
         return self._config
 

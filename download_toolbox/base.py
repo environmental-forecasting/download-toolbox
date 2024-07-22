@@ -25,6 +25,7 @@ class DataCollection(metaclass=ABCMeta):
                  *,
                  identifier: str,
                  base_path: str = os.path.join(".", "data"),
+                 config_type: str = "data_collection",
                  path_components: list = None) -> None:
         self._identifier = identifier
 
@@ -32,11 +33,13 @@ class DataCollection(metaclass=ABCMeta):
         if not isinstance(path_components, list):
             raise DataCollectionError("path_components should be an Iterator")
 
+        # TODO: seriously: root_path, path and base_path!? Rationalise this, too smelly for words
         self._base_path = base_path
         self._path_components = path_components
         self._root_path = None
         self._path = None
         self._config = None
+        self._config_type = config_type
 
         self.init()
 
@@ -68,12 +71,17 @@ class DataCollection(metaclass=ABCMeta):
     def config(self):
         if self._config is None:
             self._config = Configuration(directory=self.root_path,
+                                         config_type=self._config_type,
                                          identifier=self.identifier)
         return self._config
 
     @property
     def config_file(self):
         return self.config.output_file
+
+    @property
+    def config_type(self):
+        return self._config_type
 
 #    @staticmethod
 #    def create_instance(config):

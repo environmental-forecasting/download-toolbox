@@ -14,14 +14,14 @@ class Configuration(UserDict):
     def __init__(self,
                  directory,
                  identifier,
-                 host: str = "download_toolbox",
+                 config_type,
                  **kwargs):
         super().__init__(kwargs)
 
         self._directory = directory
         self._identifier = identifier
         self._history = []
-        self._host = host
+        self._config_type = config_type
 
         self._load_existing()
 
@@ -33,7 +33,10 @@ class Configuration(UserDict):
             obj = orjson.loads(data)
             self.data.update(obj["data"])
 
-    def render(self, owner, directory=None):
+    def render(self,
+               owner,
+               directory=None,
+               implementation=None):
         if directory is not None:
             if not os.path.isdir(directory):
                 raise ConfigurationError("Path {} should be a directory".format(directory))
@@ -42,7 +45,7 @@ class Configuration(UserDict):
         configuration = {
             "data": owner.get_config(),
             "history": self._history,
-            "implementation": owner.__class__.__name__,
+            "implementation": implementation if implementation is not None else owner.__class__.__name__,
         }
 
         logging.info("Writing configuration to {}".format(self.output_file))
@@ -69,4 +72,4 @@ class Configuration(UserDict):
 
     @property
     def output_file(self):
-        return os.path.join(self.directory, "{}.{}.json".format(self._host, self.identifier))
+        return os.path.join(self.directory, "{}.{}.json".format(self._config_type, self.identifier))
