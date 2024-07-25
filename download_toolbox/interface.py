@@ -69,7 +69,7 @@ def get_dataset_config_implementation(config: os.PathLike):
     freq_dict = {k.strip("_"): getattr(Frequency, v) for k, v in cfg.items() if v in list(Frequency.__members__)}
     remaining = {k.strip("_"): v
                  for k, v in cfg.items()
-                 if k not in [*["_{}".format(el) for el in freq_dict.keys()], "_location"]}
+                 if k not in [*["_{}".format(el) for el in freq_dict.keys()], "_location", "_config_type"]}
 
     create_kwargs = dict(location=location, **remaining, **freq_dict)
     logging.info("Attempting to instantiate {} with loaded configuration".format(implementation))

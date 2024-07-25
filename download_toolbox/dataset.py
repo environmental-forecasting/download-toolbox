@@ -220,6 +220,7 @@ class DatasetConfig(DataCollection):
             ds = ds.drop_vars(var_filter_list, errors="ignore")
 
         # TODO: Reduce spatially to required location
+        #  this will also need to set our shape details
 
         # Reduce temporally to required resolution
         # TODO: Note, https://github.com/pydata/xarray/issues/364 for Grouper functionality?
