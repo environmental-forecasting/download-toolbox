@@ -51,7 +51,7 @@ class Configuration(UserDict):
         logging.info("Writing configuration to {}".format(self.output_file))
         logging.debug(configuration)
 
-        str_data = orjson.dumps(configuration)
+        str_data = orjson.dumps(configuration, option=orjson.OPT_INDENT_2)
         with open(self.output_file, "w") as fh:
             fh.write(str_data.decode())
         return self.output_file
