@@ -98,6 +98,10 @@ class DataCollection(metaclass=ABCMeta):
     def path(self, path: str) -> None:
         self._path = path
 
+    @property
+    def path_components(self):
+        return self._path_components
+
     def get_config(self,
                    config_funcs: dict = None,
                    strip_keys: list = None):
