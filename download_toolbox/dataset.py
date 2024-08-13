@@ -179,7 +179,9 @@ class DatasetConfig(DataCollection):
                 concat_dim="time",
                 coords="minimal",
                 compat="override"
-            ).drop_duplicates("time").chunk(dict(time=1, ))
+            )
+
+            ds = ds.drop_duplicates("time").chunk(dict(time=1, ))
         return ds
 
     def save_data_for_config(self,
