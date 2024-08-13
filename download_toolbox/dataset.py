@@ -319,7 +319,7 @@ class DatasetConfig(DataCollection):
     @property
     def config(self):
         if self._config is None:
-            config_ident = ".".join(self._path_components)
+            config_ident = ".".join(self.path_components)
 
             logging.debug("Creating dataset configuration with {}".format(config_ident))
             self._config = Configuration(config_type=self._config_type,
