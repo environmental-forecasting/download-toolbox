@@ -237,13 +237,13 @@ class DatasetConfig(DataCollection):
         # For all variables in ds, determine if there are destinations available
         for var_config in [vc for vc in self.variables if vc.name in ds.data_vars]:
             da = getattr(ds, var_config.name)
-            logging.debug("Resampling to period 1{}: {}".format(self.frequency.freq, da))
+            logging.debug("Resampling to period 1{}: {}".format(self.frequency.freq, da.shape))
             da = da.sortby("time").resample(time="1{}".format(self.frequency.freq)).mean(keep_attrs=True)
 
             logging.debug("Grouping {} by {}".format(var_config, group_by))
             for dt, dt_da in da.groupby(group_by):
                 req_dates = pd.to_datetime(dt_da.time.values)
-                logging.debug(req_dates)
+                logging.debug("Have group of {} dates".format(len(req_dates)))
                 destination_path = self.var_filepath(var_config, req_dates)
 
                 copy_attrs = {k: v for k, v in ds.attrs.items() if k.startswith("geospatial")}
