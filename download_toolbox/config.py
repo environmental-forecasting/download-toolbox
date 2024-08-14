@@ -45,7 +45,9 @@ class Configuration(UserDict):
         configuration = {
             "data": owner.get_config(),
             "history": self._history,
-            "implementation": implementation if implementation is not None else owner.__class__.__name__,
+            "implementation": implementation
+            if implementation is not None
+            else ":".join([owner.__module__, owner.__class__.__name__]),
         }
 
         logging.info("Writing configuration to {}".format(self.output_file))

@@ -26,7 +26,8 @@ class DataCollection(metaclass=ABCMeta):
                  identifier: str,
                  base_path: str = os.path.join(".", "data"),
                  config_type: str = "data_collection",
-                 path_components: list = None) -> None:
+                 path_components: list = None,
+                 **kwargs) -> None:
         self._identifier = identifier
 
         path_components = list() if path_components is None else path_components
@@ -104,7 +105,31 @@ class DataCollection(metaclass=ABCMeta):
 
     def get_config(self,
                    config_funcs: dict = None,
-                   strip_keys: list = None):
+                   strip_keys: list = None) -> dict:
+        """get_config returns the implementation configuration for re-instantiation
+
+        get_config returns a configuration dictionary that provides not just a reference
+        but also a portability layer for recreating classes.
+
+        For things that aren't serialisable natively, use config_funcs to serialise or represent
+        values that allow recreation (it's on you to recreate those appropriately). An example
+        is available at ...download_toolbox.interface.get_dataset_config_implementation
+
+        If you supply any arguments in a derived implementation, use strip_keys to prevent
+        them being exported into configurations that would then result in duplicate arguments
+        when the class is recreated from config
+
+        TODO: documenting get_config in derived implementations
+        TODO: schema and validation for this library and others, helping to control implementations
+         to aid portability of pipelines
+
+        Args:
+            config_funcs:
+            strip_keys:
+
+        Returns:
+
+        """
         strip_keys = [] if strip_keys is None else strip_keys
         return {k: config_funcs[k](v) if config_funcs is not None and k in config_funcs else v
                 for k, v in self.__dict__.items() if k not in ["_path", "_config", "_root_path"] + strip_keys}
@@ -116,6 +141,7 @@ class DataCollection(metaclass=ABCMeta):
     def save_config(self):
         saved_config = self.config.render(self)
         logging.info("Saved dataset config {}".format(saved_config))
+        return saved_config
 
     @property
     def identifier(self) -> str:

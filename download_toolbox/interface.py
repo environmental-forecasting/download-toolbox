@@ -9,6 +9,7 @@ from download_toolbox.config import Configuration
 from download_toolbox.dataset import DatasetConfig
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
+from download_toolbox.utils import get_implementation
 
 from download_toolbox.data.amsr import AMSRDatasetConfig
 from download_toolbox.data.cds import ERA5DatasetConfig
@@ -28,26 +29,8 @@ __all__ = [
     "Location",
     # Functions
     "get_dataset_config_implementation",
+    "get_implementation",
 ]
-
-
-class DataSetFactory(object):
-    @classmethod
-    def get_item(cls, impl):
-        klass_name = DataSetFactory.get_klass_name(impl)
-
-        # This looks weird, but to avoid circular imports it helps to isolate implementations
-        # herein, so that dependent libraries can more easily import functionality without
-        # accidentally importing everything through download_toolbox.data
-        if hasattr(sys.modules[__name__], klass_name):
-            return getattr(sys.modules[__name__], klass_name)
-
-        logging.error("No class named {0} found in download_toolbox.data".format(klass_name))
-        raise ReferenceError
-
-    @classmethod
-    def get_klass_name(cls, name):
-        return name.split(":")[-1]
 
 
 def get_dataset_config_implementation(config: os.PathLike):
@@ -77,4 +60,4 @@ def get_dataset_config_implementation(config: os.PathLike):
     logging.info("Attempting to instantiate {} with loaded configuration".format(implementation))
     logging.debug("Converted kwargs from the retrieved configuration: {}".format(create_kwargs))
 
-    return DataSetFactory.get_item(implementation)(**create_kwargs)
+    return get_implementation(implementation)(**create_kwargs)

@@ -154,7 +154,7 @@ class DatasetConfig(DataCollection):
         )
 
         config_funcs = {} if config_funcs is None else config_funcs
-        strip_keys = my_keys if strip_keys is None else my_keys.extend(strip_keys)
+        strip_keys = my_keys if strip_keys is None else my_keys + strip_keys
         return super().get_config(config_funcs={**my_funcs, **config_funcs},
                                   strip_keys=strip_keys)
 

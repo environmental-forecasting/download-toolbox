@@ -1,7 +1,9 @@
 import datetime as dt
 import ftplib
+import importlib
 import logging
 import subprocess as sp
+import sys
 import threading
 from ftplib import FTP
 
@@ -10,6 +12,25 @@ from functools import wraps
 import dask
 import requests
 from dask.distributed import Client, LocalCluster
+
+
+def get_implementation(location):
+    if ":" not in location:
+        if hasattr(sys.modules[__name__], location):
+            return getattr(sys.modules[__name__], location)
+        else:
+            raise ImportError("There is no {} available in sys.modules[__name__] "
+                              "and no module path provided".format(location))
+    module_ref, object_name = location.split(":")
+    implementation = None
+
+    try:
+        module = importlib.import_module(module_ref)
+        implementation = getattr(module, object_name)
+    except ImportError:
+        logging.exception("Unable to import from location: {}".format(location))
+
+    return implementation
 
 
 def run_command(command: str, dry: bool = False):
