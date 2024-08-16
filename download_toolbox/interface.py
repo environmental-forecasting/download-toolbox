@@ -58,6 +58,6 @@ def get_dataset_config_implementation(config: os.PathLike):
 
     create_kwargs = dict(location=location, **remaining, **freq_dict)
     logging.info("Attempting to instantiate {} with loaded configuration".format(implementation))
-    logging.debug("Converted kwargs from the retrieved configuration: {}".format(create_kwargs))
+    logging.debug("Converted kwargs from the retrieved configuration: {}".format(",".join(create_kwargs.keys())))
 
     return get_implementation(implementation)(**create_kwargs)
