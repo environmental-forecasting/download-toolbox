@@ -45,7 +45,7 @@ def get_dataset_config_implementation(config: os.PathLike):
         data = fh.read()
 
     cfg = orjson.loads(data)
-    logging.debug("Loaded configuration {}".format(cfg))
+    logging.debug("Loaded configuration {}".format(",".join(cfg.keys())))
     cfg, implementation = cfg["data"], cfg["implementation"]
 
     # TODO: Getting a nicer implementation might be the way forward, but this will do
