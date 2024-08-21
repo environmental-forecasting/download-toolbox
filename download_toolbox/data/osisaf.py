@@ -15,6 +15,26 @@ from download_toolbox.time import Frequency
 
 """
 
+"""
+    https://osi-saf.eumetsat.int/community/list-of-service-messages/release-osi-saf-monthly-mean-sea-ice-concentration-cdricdr
+"""
+invalid_sic_months = {
+    "north": [
+        dt.date(1978, 10, 30),
+        dt.date(1986, 4, 30),
+        dt.date(1986, 5, 31),
+        dt.date(1986, 6, 30),
+        dt.date(1987, 12, 31),
+    ],
+    "south": [
+        dt.date(1978, 10, 30),
+        dt.date(1986, 4, 30),
+        dt.date(1986, 5, 31),
+        dt.date(1986, 6, 30),
+        dt.date(1987, 12, 31),
+    ]
+}
+
 invalid_sic_days = {
     "north": [
         *[d.date() for d in
@@ -228,15 +248,13 @@ class SICDownloader(ThreadedDownloader):
         if start_date < self._conc_start:
             raise DownloaderError("OSISAF SIC only exists past {}".format(self._conc_start))
 
-        if dataset.location.north:
-            self._invalid_dates = invalid_sic_days["north"]
-            self._hemi_str = "nh"
-        elif dataset.location.south:
-            self._invalid_dates = invalid_sic_days["south"]
-            self._hemi_str = "sh"
-        else:
+        if not (dataset.location.north or dataset.location.south):
             # TODO: other locations are valid, there is work to do to support their "cutting out"
             raise RuntimeError("Please only use this downloader with whole hemispheres, for the mo")
+
+        invalid_dates = invalid_sic_days if dataset.frequency == Frequency.DAY else invalid_sic_months
+        self._hemi_str = "nh" if dataset.location.north else "sh"
+        self._invalid_dates = invalid_dates["north" if dataset.location.north else "south"]
 
         self._ftp_client = FTPClient(host="osisaf.met.no")
 
