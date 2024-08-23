@@ -226,6 +226,12 @@ class SICDatasetConfig(DatasetConfig):
                          var_names=["siconca"] if var_names is None else var_names,
                          **kwargs)
 
+        invalid_dates = invalid_sic_days if self.frequency == Frequency.DAY else invalid_sic_months
+        self._invalid_dates = invalid_dates["north" if self.location.north else "south"]
+
+    @property
+    def invalid_dates(self):
+        return self._invalid_dates
 
 class SICDownloader(ThreadedDownloader):
     """Downloads OSISAF SIC data from 1978-present using FTP.
@@ -252,9 +258,7 @@ class SICDownloader(ThreadedDownloader):
             # TODO: other locations are valid, there is work to do to support their "cutting out"
             raise RuntimeError("Please only use this downloader with whole hemispheres, for the mo")
 
-        invalid_dates = invalid_sic_days if dataset.frequency == Frequency.DAY else invalid_sic_months
         self._hemi_str = "nh" if dataset.location.north else "sh"
-        self._invalid_dates = invalid_dates["north" if dataset.location.north else "south"]
 
         self._ftp_client = FTPClient(host="osisaf.met.no")
 

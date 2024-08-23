@@ -70,7 +70,10 @@ def merge_files(new_datafile: object,
         ))
         d2 = xr.open_dataarray(other_datafile,
                                drop_variables=drop_variables)
-        new_ds = xr.concat([d1, d2], dim="time").\
+
+        # Ordering is important for merging, place the temporary over the existing
+        # as it will ensure that code updates and other changes are updated
+        new_ds = xr.concat([d2, d1], dim="time").\
             sortby("time").\
             drop_duplicates("time", keep="first")
 
