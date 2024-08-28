@@ -1,5 +1,7 @@
+import datetime as dt
 import logging
 import os
+import sys
 
 from collections import UserDict
 
@@ -31,6 +33,7 @@ class Configuration(UserDict):
             with open(self.output_file, "r") as fh:
                 data = fh.read()
             obj = orjson.loads(data)
+            self._history.extend(obj["history"])
             self.data.update(obj["data"])
 
     def render(self,
@@ -41,6 +44,10 @@ class Configuration(UserDict):
             if not os.path.isdir(directory):
                 raise ConfigurationError("Path {} should be a directory".format(directory))
             self.directory = directory
+
+        self._history.append(" ".join([
+            "Run at {}: ".format(dt.datetime.now(dt.timezone.utc).strftime("%c")),
+            *sys.argv]))
 
         configuration = {
             "data": owner.get_config(),
