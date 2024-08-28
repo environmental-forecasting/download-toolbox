@@ -147,11 +147,26 @@ class DatasetConfig(DataCollection):
                    config_funcs: dict = None,
                    strip_keys: list = None):
         my_keys = ["_overwrite"]
+
+        def merge_var_files(x):
+            data = dict() \
+                if ("_var_files" not in self.config.data
+                    or self.config.data["_var_files"] is None) \
+                else self.config.data["_var_files"].copy()
+
+            for var_name in x.keys():
+                if var_name not in data:
+                    data[var_name] = list()
+                data[var_name].extend(x[var_name])
+            return {k: list(sorted(set(files))) for k, files in data.items()}
+
         my_funcs = dict(
             _frequency=lambda x: x.name,
             _location=lambda x: dict(name=x.name, bounds=x.bounds)
             if not x.north and not x.south else dict(name=x.name, north=x.north, south=x.south),
             _output_group_by=lambda x: x.name,
+            _var_names=lambda x: list(set(self._var_names + x)),
+            _var_files=merge_var_files
         )
 
         config_funcs = {} if config_funcs is None else config_funcs

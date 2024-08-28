@@ -233,6 +233,7 @@ class SICDatasetConfig(DatasetConfig):
     def invalid_dates(self):
         return self._invalid_dates
 
+
 class SICDownloader(ThreadedDownloader):
     """Downloads OSISAF SIC data from 1978-present using FTP.
 
