@@ -46,7 +46,7 @@ class Configuration(UserDict):
             self.directory = directory
 
         self._history.append(" ".join([
-            "Run at {}: ".format(dt.datetime.now(dt.timezone.utc).strftime("%c")),
+            "Run at {}: ".format(dt.datetime.now(dt.timezone.utc).strftime("%c %Z")),
             *sys.argv]))
 
         configuration = {
