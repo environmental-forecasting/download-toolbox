@@ -61,12 +61,27 @@ class DataCollection(metaclass=ABCMeta):
             else:
                 logging.info("Skipping creation for symlink: {}".format(self._path))
 
-    def copy_to(self, new_identifier):
+    def copy_to(self, new_identifier: object, base_path: os.PathLike = None):
+        """
+
+        Args:
+            new_identifier:
+            base_path:
+        """
         old_path = self.path
+
+        if base_path is not None:
+            logging.info("Setting base path for copy to {}".format(base_path))
+            self._base_path = base_path
+
         self.identifier = new_identifier
 
         logging.info("Copying {} to {}".format(old_path, self.path))
         shutil.copytree(old_path, self.path, dirs_exist_ok=True)
+
+    @property
+    def base_path(self):
+        return self._base_path
 
     @property
     def config(self):

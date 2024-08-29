@@ -109,9 +109,15 @@ class DatasetConfig(DataCollection):
 
         return data_var_path
 
-    def copy_to(self, new_identifier):
+    def copy_to(self, new_identifier: object, base_path: os.PathLike = None) -> object:
+        """
+
+        Args:
+            new_identifier:
+            base_path:
+        """
         old_path = self.path
-        super().copy_to(new_identifier)
+        super().copy_to(new_identifier, base_path)
         logging.info("Applying copy_to to identifier {}".format(new_identifier))
 
         for var_name in self.var_files.keys():
