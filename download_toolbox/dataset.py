@@ -165,7 +165,8 @@ class DatasetConfig(DataCollection):
             _location=lambda x: dict(name=x.name, bounds=x.bounds)
             if not x.north and not x.south else dict(name=x.name, north=x.north, south=x.south),
             _output_group_by=lambda x: x.name,
-            _var_names=lambda x: list(set(self._var_names + x)),
+            # TODO: this can't be done like this as the levels and var_names are ordered - GH#51
+            # _var_names=lambda x: self._var_names + x,
             _var_files=merge_var_files
         )
 
