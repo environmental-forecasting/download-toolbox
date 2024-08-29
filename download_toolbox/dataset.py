@@ -97,8 +97,8 @@ class DatasetConfig(DataCollection):
             append = []
 
         data_var_path = os.path.join(self.path if not root else self.root_path, *[var, *append])
-        logging.debug("Handling {}data var path: {}".
-                      format("root " if root else "", data_var_path))
+        # logging.debug("Handling {}data var path: {}".
+        #               format("root " if root else "", data_var_path))
 
         if not os.path.exists(data_var_path):
             if not missing_error:
