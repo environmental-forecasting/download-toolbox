@@ -44,12 +44,16 @@ class DataCollection(metaclass=ABCMeta):
 
         self.init()
 
-    def copy_to(self, new_identifier: object, base_path: os.PathLike = None):
+    def copy_to(self,
+                new_identifier: object,
+                base_path: os.PathLike = None,
+                skip_copy: bool = False):
         """
 
         Args:
             new_identifier:
             base_path:
+            skip_copy:
         """
         old_path = self.path
 
@@ -59,8 +63,11 @@ class DataCollection(metaclass=ABCMeta):
 
         self.identifier = new_identifier
 
-        logging.info("Copying {} to {}".format(old_path, self.path))
-        shutil.copytree(old_path, self.path, dirs_exist_ok=True)
+        if not skip_copy:
+            logging.info("Copying {} to {}".format(old_path, self.path))
+            shutil.copytree(old_path, self.path, dirs_exist_ok=True)
+        else:
+            logging.warning("Skipping naive copy of {} to {}".format(old_path, self.path))
 
     def get_config(self,
                    config_funcs: dict = None,

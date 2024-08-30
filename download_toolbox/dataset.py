@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import shutil
 import tempfile
 from dataclasses import dataclass
 from pprint import pformat
@@ -109,20 +110,31 @@ class DatasetConfig(DataCollection):
 
         return data_var_path
 
-    def copy_to(self, new_identifier: object, base_path: os.PathLike = None) -> object:
+    def copy_to(self,
+                new_identifier: object,
+                base_path: os.PathLike = None,
+                skip_copy: bool = False) -> object:
         """
 
         Args:
             new_identifier:
             base_path:
+            skip_copy:
         """
         old_path = self.path
-        super().copy_to(new_identifier, base_path)
+        super().copy_to(new_identifier, base_path, skip_copy=True)
         logging.info("Applying copy_to to identifier {}".format(new_identifier))
 
         for var_name in self.var_files.keys():
-            self.var_files[var_name] = [var_file.replace(old_path, self.path)
-                                        for var_file in self.var_files[var_name]]
+            old_files = self.var_files[var_name]
+            new_files = [var_file.replace(old_path, self.path) for var_file in old_files]
+
+            for src, dest in zip(old_files, new_files):
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                logging.debug("Copying {} to {}".format(src, dest))
+                shutil.copy(src, dest)
+
+            self.var_files[var_name] = new_files
 
     def filter_extant_data(self,
                            var_config: VarConfig,
@@ -374,7 +386,6 @@ class DatasetConfig(DataCollection):
 
     @var_files.setter
     def var_files(self, value: dict):
-        print(value)
         logging.warning("Setting new file setup to dataset with {} files".format(
             ", ".join(["{} for {}".format(len(v), k) for k, v in value.items()])))
         self._var_files = value
