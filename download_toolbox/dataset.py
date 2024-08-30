@@ -372,6 +372,13 @@ class DatasetConfig(DataCollection):
     def var_files(self):
         return self._var_files
 
+    @var_files.setter
+    def var_files(self, value: dict):
+        print(value)
+        logging.warning("Setting new file setup to dataset with {} files".format(
+            ", ".join(["{} for {}".format(len(v), k) for k, v in value.items()])))
+        self._var_files = value
+
     def __repr__(self):
         return pformat(self.__dict__)
 

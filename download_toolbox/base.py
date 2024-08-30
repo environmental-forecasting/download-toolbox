@@ -44,23 +44,6 @@ class DataCollection(metaclass=ABCMeta):
 
         self.init()
 
-    def init(self):
-        self._config = None
-        self._root_path = os.path.join(self._base_path, self._identifier)
-        self._path = os.path.join(self._root_path, *self._path_components)
-
-        if self._identifier is None:
-            raise DataCollectionError("No identifier supplied")
-
-        if os.path.exists(self._path):
-            logging.debug("{} already exists".format(self._path))
-        else:
-            if not os.path.islink(self._path):
-                logging.info("Creating path: {}".format(self._path))
-                os.makedirs(self._path, exist_ok=True)
-            else:
-                logging.info("Skipping creation for symlink: {}".format(self._path))
-
     def copy_to(self, new_identifier: object, base_path: os.PathLike = None):
         """
 
@@ -78,45 +61,6 @@ class DataCollection(metaclass=ABCMeta):
 
         logging.info("Copying {} to {}".format(old_path, self.path))
         shutil.copytree(old_path, self.path, dirs_exist_ok=True)
-
-    @property
-    def base_path(self):
-        return self._base_path
-
-    @property
-    def config(self):
-        if self._config is None:
-            self._config = Configuration(directory=self.root_path,
-                                         config_type=self._config_type,
-                                         identifier=self.identifier)
-        return self._config
-
-    @property
-    def config_file(self):
-        return self.config.output_file
-
-    @property
-    def config_type(self):
-        return self._config_type
-
-#    @staticmethod
-#    def create_instance(config):
-#        logging.info("Opening dataset config {}".format(config))
-#
-#        raise RuntimeError("This is not yet implemented, get working for preprocess-toolbox!")
-
-    @property
-    def path(self) -> str:
-        """The base path of the data collection."""
-        return self._path
-
-    @path.setter
-    def path(self, path: str) -> None:
-        self._path = path
-
-    @property
-    def path_components(self):
-        return self._path_components
 
     def get_config(self,
                    config_funcs: dict = None,
@@ -149,14 +93,47 @@ class DataCollection(metaclass=ABCMeta):
         return {k: config_funcs[k](v) if config_funcs is not None and k in config_funcs else v
                 for k, v in self.__dict__.items() if k not in ["_path", "_config", "_root_path"] + strip_keys}
 
-    @property
-    def root_path(self):
-        return self._root_path
+    def init(self):
+        self._config = None
+        self._root_path = os.path.join(self._base_path, self._identifier)
+        self._path = os.path.join(self._root_path, *self._path_components)
+
+        if self._identifier is None:
+            raise DataCollectionError("No identifier supplied")
+
+        if os.path.exists(self._path):
+            logging.debug("{} already exists".format(self._path))
+        else:
+            if not os.path.islink(self._path):
+                logging.info("Creating path: {}".format(self._path))
+                os.makedirs(self._path, exist_ok=True)
+            else:
+                logging.info("Skipping creation for symlink: {}".format(self._path))
 
     def save_config(self):
         saved_config = self.config.render(self)
         logging.info("Saved dataset config {}".format(saved_config))
         return saved_config
+
+    @property
+    def base_path(self):
+        return self._base_path
+
+    @property
+    def config(self):
+        if self._config is None:
+            self._config = Configuration(directory=self.root_path,
+                                         config_type=self._config_type,
+                                         identifier=self.identifier)
+        return self._config
+
+    @property
+    def config_file(self):
+        return self.config.output_file
+
+    @property
+    def config_type(self):
+        return self._config_type
 
     @property
     def identifier(self) -> str:
@@ -167,6 +144,23 @@ class DataCollection(metaclass=ABCMeta):
     def identifier(self, identifier: str) -> None:
         self._identifier = identifier
         self.init()
+
+    @property
+    def path(self) -> str:
+        """The base path of the data collection."""
+        return self._path
+
+    @path.setter
+    def path(self, path: str) -> None:
+        self._path = path
+
+    @property
+    def path_components(self):
+        return self._path_components
+
+    @property
+    def root_path(self):
+        return self._root_path
 
 
 #    def __repr__(self):
