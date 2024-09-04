@@ -30,7 +30,7 @@ dependencies = [
     "xarray[io]"
 ]
 classifiers = [
-    "Development Status :: 3",
+    "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
