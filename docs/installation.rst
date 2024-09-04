@@ -38,7 +38,7 @@ Or download the `tarball`_:
 
 .. code-block:: console
 
-    $ curl -OJL https://github.com/antarctica/download_toolbox/tarball/master
+    $ curl -OJL https://github.com/environmental-forecasting/download_toolbox/tarball/master
 
 Once you have a copy of the source, you can install it with:
 
@@ -47,5 +47,5 @@ Once you have a copy of the source, you can install it with:
     $ python setup.py install
 
 
-.. _Github repo: https://github.com/antarctica/download_toolbox
-.. _tarball: https://github.com/antarctica/download_toolbox/tarball/master
+.. _Github repo: https://github.com/environmental-forecasting/download_toolbox
+.. _tarball: https://github.com/antarctica/environmental-forecasting/tarball/master

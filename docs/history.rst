@@ -1,1 +1,4 @@
-.. include:: ../HISTORY.rst
+History
+=======
+
+.. literalinclude:: ../HISTORY.md

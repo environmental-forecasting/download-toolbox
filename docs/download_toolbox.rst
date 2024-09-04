@@ -10,6 +10,14 @@ Subpackages
    download_toolbox.data
    download_toolbox.tests
 
+Module contents
+---------------
+
+.. automodule:: download_toolbox
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Submodules
 ----------
 
@@ -37,10 +45,26 @@ download\_toolbox.config module
    :undoc-members:
    :show-inheritance:
 
+download\_toolbox.dataset module
+--------------------------------
+
+.. automodule:: download_toolbox.dataset
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 download\_toolbox.download module
 ---------------------------------
 
 .. automodule:: download_toolbox.download
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+download\_toolbox.interface module
+----------------------------------
+
+.. automodule:: download_toolbox.interface
    :members:
    :undoc-members:
    :show-inheritance:
@@ -65,14 +89,6 @@ download\_toolbox.utils module
 ------------------------------
 
 .. automodule:: download_toolbox.utils
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: download_toolbox
    :members:
    :undoc-members:
    :show-inheritance:

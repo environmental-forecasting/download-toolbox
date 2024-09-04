@@ -1,2 +1,5 @@
-```{include} ../AUTHORS.md
-```
+Authors
+=======
+
+.. literalinclude:: ../AUTHORS.md
+
