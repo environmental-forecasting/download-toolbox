@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import shutil
 import tempfile
 from dataclasses import dataclass
 from pprint import pformat
@@ -97,7 +98,8 @@ class DatasetConfig(DataCollection):
             append = []
 
         data_var_path = os.path.join(self.path if not root else self.root_path, *[var, *append])
-        logging.debug("Handling data var path: {}".format(data_var_path))
+        # logging.debug("Handling {}data var path: {}".
+        #               format("root " if root else "", data_var_path))
 
         if not os.path.exists(data_var_path):
             if not missing_error:
@@ -108,14 +110,31 @@ class DatasetConfig(DataCollection):
 
         return data_var_path
 
-    def copy_to(self, new_identifier):
+    def copy_to(self,
+                new_identifier: object,
+                base_path: os.PathLike = None,
+                skip_copy: bool = False) -> object:
+        """
+
+        Args:
+            new_identifier:
+            base_path:
+            skip_copy:
+        """
         old_path = self.path
-        super().copy_to(new_identifier)
+        super().copy_to(new_identifier, base_path, skip_copy=True)
         logging.info("Applying copy_to to identifier {}".format(new_identifier))
 
         for var_name in self.var_files.keys():
-            self.var_files[var_name] = [var_file.replace(old_path, self.path)
-                                        for var_file in self.var_files[var_name]]
+            old_files = self.var_files[var_name]
+            new_files = [var_file.replace(old_path, self.path) for var_file in old_files]
+
+            for src, dest in zip(old_files, new_files):
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                logging.debug("Copying {} to {}".format(src, dest))
+                shutil.copy(src, dest)
+
+            self.var_files[var_name] = new_files
 
     def filter_extant_data(self,
                            var_config: VarConfig,
@@ -146,15 +165,31 @@ class DatasetConfig(DataCollection):
                    config_funcs: dict = None,
                    strip_keys: list = None):
         my_keys = ["_overwrite"]
+
+        def merge_var_files(x):
+            data = dict() \
+                if ("_var_files" not in self.config.data
+                    or self.config.data["_var_files"] is None) \
+                else self.config.data["_var_files"].copy()
+
+            for var_name in x.keys():
+                if var_name not in data:
+                    data[var_name] = list()
+                data[var_name].extend(x[var_name])
+            return {k: list(sorted(set(files))) for k, files in data.items()}
+
         my_funcs = dict(
             _frequency=lambda x: x.name,
             _location=lambda x: dict(name=x.name, bounds=x.bounds)
             if not x.north and not x.south else dict(name=x.name, north=x.north, south=x.south),
             _output_group_by=lambda x: x.name,
+            # TODO: this can't be done like this as the levels and var_names are ordered - GH#51
+            # _var_names=lambda x: self._var_names + x,
+            _var_files=merge_var_files
         )
 
         config_funcs = {} if config_funcs is None else config_funcs
-        strip_keys = my_keys if strip_keys is None else my_keys.extend(strip_keys)
+        strip_keys = my_keys if strip_keys is None else my_keys + strip_keys
         return super().get_config(config_funcs={**my_funcs, **config_funcs},
                                   strip_keys=strip_keys)
 
@@ -179,7 +214,9 @@ class DatasetConfig(DataCollection):
                 concat_dim="time",
                 coords="minimal",
                 compat="override"
-            ).drop_duplicates("time").chunk(dict(time=1, ))
+            )
+
+            ds = ds.drop_duplicates("time").chunk(dict(time=1, ))
         return ds
 
     def save_data_for_config(self,
@@ -235,13 +272,13 @@ class DatasetConfig(DataCollection):
         # For all variables in ds, determine if there are destinations available
         for var_config in [vc for vc in self.variables if vc.name in ds.data_vars]:
             da = getattr(ds, var_config.name)
-            logging.debug("Resampling to period 1{}: {}".format(self.frequency.freq, da))
+            logging.debug("Resampling to period 1{}: {}".format(self.frequency.freq, da.shape))
             da = da.sortby("time").resample(time="1{}".format(self.frequency.freq)).mean(keep_attrs=True)
 
             logging.debug("Grouping {} by {}".format(var_config, group_by))
             for dt, dt_da in da.groupby(group_by):
                 req_dates = pd.to_datetime(dt_da.time.values)
-                logging.debug(req_dates)
+                logging.debug("Have group of {} dates".format(len(req_dates)))
                 destination_path = self.var_filepath(var_config, req_dates)
 
                 copy_attrs = {k: v for k, v in ds.attrs.items() if k.startswith("geospatial")}
@@ -319,8 +356,7 @@ class DatasetConfig(DataCollection):
     @property
     def config(self):
         if self._config is None:
-            # TODO: this should not be always auto-generated - allow user specification
-            config_ident = ".".join([self.frequency.name.lower(), self.location.name])
+            config_ident = ".".join(self.path_components)
 
             logging.debug("Creating dataset configuration with {}".format(config_ident))
             self._config = Configuration(config_type=self._config_type,
@@ -347,6 +383,12 @@ class DatasetConfig(DataCollection):
     @property
     def var_files(self):
         return self._var_files
+
+    @var_files.setter
+    def var_files(self, value: dict):
+        logging.warning("Setting new file setup to dataset with {} files".format(
+            ", ".join(["{} for {}".format(len(v), k) for k, v in value.items()])))
+        self._var_files = value
 
     def __repr__(self):
         return pformat(self.__dict__)

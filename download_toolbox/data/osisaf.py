@@ -15,6 +15,26 @@ from download_toolbox.time import Frequency
 
 """
 
+"""
+    https://osi-saf.eumetsat.int/community/list-of-service-messages/release-osi-saf-monthly-mean-sea-ice-concentration-cdricdr
+"""
+invalid_sic_months = {
+    "north": [
+        dt.date(1978, 10, 30),
+        dt.date(1986, 4, 30),
+        dt.date(1986, 5, 31),
+        dt.date(1986, 6, 30),
+        dt.date(1987, 12, 31),
+    ],
+    "south": [
+        dt.date(1978, 10, 30),
+        dt.date(1986, 4, 30),
+        dt.date(1986, 5, 31),
+        dt.date(1986, 6, 30),
+        dt.date(1987, 12, 31),
+    ]
+}
+
 invalid_sic_days = {
     "north": [
         *[d.date() for d in
@@ -206,6 +226,13 @@ class SICDatasetConfig(DatasetConfig):
                          var_names=["siconca"] if var_names is None else var_names,
                          **kwargs)
 
+        invalid_dates = invalid_sic_days if self.frequency == Frequency.DAY else invalid_sic_months
+        self._invalid_dates = invalid_dates["north" if self.location.north else "south"]
+
+    @property
+    def invalid_dates(self):
+        return self._invalid_dates
+
 
 class SICDownloader(ThreadedDownloader):
     """Downloads OSISAF SIC data from 1978-present using FTP.
@@ -228,15 +255,11 @@ class SICDownloader(ThreadedDownloader):
         if start_date < self._conc_start:
             raise DownloaderError("OSISAF SIC only exists past {}".format(self._conc_start))
 
-        if dataset.location.north:
-            self._invalid_dates = invalid_sic_days["north"]
-            self._hemi_str = "nh"
-        elif dataset.location.south:
-            self._invalid_dates = invalid_sic_days["south"]
-            self._hemi_str = "sh"
-        else:
+        if not (dataset.location.north or dataset.location.south):
             # TODO: other locations are valid, there is work to do to support their "cutting out"
             raise RuntimeError("Please only use this downloader with whole hemispheres, for the mo")
+
+        self._hemi_str = "nh" if dataset.location.north else "sh"
 
         self._ftp_client = FTPClient(host="osisaf.met.no")
 

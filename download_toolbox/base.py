@@ -26,7 +26,8 @@ class DataCollection(metaclass=ABCMeta):
                  identifier: str,
                  base_path: str = os.path.join(".", "data"),
                  config_type: str = "data_collection",
-                 path_components: list = None) -> None:
+                 path_components: list = None,
+                 **kwargs) -> None:
         self._identifier = identifier
 
         path_components = list() if path_components is None else path_components
@@ -42,6 +43,62 @@ class DataCollection(metaclass=ABCMeta):
         self._config_type = config_type
 
         self.init()
+
+    def copy_to(self,
+                new_identifier: object,
+                base_path: os.PathLike = None,
+                skip_copy: bool = False):
+        """
+
+        Args:
+            new_identifier:
+            base_path:
+            skip_copy:
+        """
+        old_path = self.path
+
+        if base_path is not None:
+            logging.info("Setting base path for copy to {}".format(base_path))
+            self._base_path = base_path
+
+        self.identifier = new_identifier
+
+        if not skip_copy:
+            logging.info("Copying {} to {}".format(old_path, self.path))
+            shutil.copytree(old_path, self.path, dirs_exist_ok=True)
+        else:
+            logging.warning("Skipping naive copy of {} to {}".format(old_path, self.path))
+
+    def get_config(self,
+                   config_funcs: dict = None,
+                   strip_keys: list = None) -> dict:
+        """get_config returns the implementation configuration for re-instantiation
+
+        get_config returns a configuration dictionary that provides not just a reference
+        but also a portability layer for recreating classes.
+
+        For things that aren't serialisable natively, use config_funcs to serialise or represent
+        values that allow recreation (it's on you to recreate those appropriately). An example
+        is available at ...download_toolbox.interface.get_dataset_config_implementation
+
+        If you supply any arguments in a derived implementation, use strip_keys to prevent
+        them being exported into configurations that would then result in duplicate arguments
+        when the class is recreated from config
+
+        TODO: documenting get_config in derived implementations
+        TODO: schema and validation for this library and others, helping to control implementations
+         to aid portability of pipelines
+
+        Args:
+            config_funcs:
+            strip_keys:
+
+        Returns:
+
+        """
+        strip_keys = [] if strip_keys is None else strip_keys
+        return {k: config_funcs[k](v) if config_funcs is not None and k in config_funcs else v
+                for k, v in self.__dict__.items() if k not in ["_path", "_config", "_root_path"] + strip_keys}
 
     def init(self):
         self._config = None
@@ -60,12 +117,14 @@ class DataCollection(metaclass=ABCMeta):
             else:
                 logging.info("Skipping creation for symlink: {}".format(self._path))
 
-    def copy_to(self, new_identifier):
-        old_path = self.path
-        self.identifier = new_identifier
+    def save_config(self):
+        saved_config = self.config.render(self)
+        logging.info("Saved dataset config {}".format(saved_config))
+        return saved_config
 
-        logging.info("Copying {} to {}".format(old_path, self.path))
-        shutil.copytree(old_path, self.path, dirs_exist_ok=True)
+    @property
+    def base_path(self):
+        return self._base_path
 
     @property
     def config(self):
@@ -83,11 +142,15 @@ class DataCollection(metaclass=ABCMeta):
     def config_type(self):
         return self._config_type
 
-#    @staticmethod
-#    def create_instance(config):
-#        logging.info("Opening dataset config {}".format(config))
-#
-#        raise RuntimeError("This is not yet implemented, get working for preprocess-toolbox!")
+    @property
+    def identifier(self) -> str:
+        """The identifier (label) for this data collection."""
+        return self._identifier
+
+    @identifier.setter
+    def identifier(self, identifier: str) -> None:
+        self._identifier = identifier
+        self.init()
 
     @property
     def path(self) -> str:
@@ -98,30 +161,13 @@ class DataCollection(metaclass=ABCMeta):
     def path(self, path: str) -> None:
         self._path = path
 
-    def get_config(self,
-                   config_funcs: dict = None,
-                   strip_keys: list = None):
-        strip_keys = [] if strip_keys is None else strip_keys
-        return {k: config_funcs[k](v) if config_funcs is not None and k in config_funcs else v
-                for k, v in self.__dict__.items() if k not in ["_path", "_config", "_root_path"] + strip_keys}
+    @property
+    def path_components(self):
+        return self._path_components
 
     @property
     def root_path(self):
         return self._root_path
-
-    def save_config(self):
-        saved_config = self.config.render(self)
-        logging.info("Saved dataset config {}".format(saved_config))
-
-    @property
-    def identifier(self) -> str:
-        """The identifier (label) for this data collection."""
-        return self._identifier
-
-    @identifier.setter
-    def identifier(self, identifier: str) -> None:
-        self._identifier = identifier
-        self.init()
 
 
 #    def __repr__(self):
