@@ -1,10 +1,10 @@
 # BAS Download Toolbox
 
-![GitHub issues](https://img.shields.io/github/issues/antarctica/download-toolbox?style=plastic)
-![GitHub closed issues](https://img.shields.io/github/issues-closed/antarctica/download-toolbox?style=plastic)
-![GitHub](https://img.shields.io/github/license/antarctica/download-toolbox)
-![GitHub forks](https://img.shields.io/github/forks/antarctica/download-toolbox?style=social)
-![GitHub forks](https://img.shields.io/github/stars/antarctica/download-toolbox?style=social)
+![GitHub issues](https://img.shields.io/github/issues/environmental-forecasting/download-toolbox?style=plastic)
+![GitHub closed issues](https://img.shields.io/github/issues-closed/environmental-forecasting/download-toolbox?style=plastic)
+![GitHub](https://img.shields.io/github/license/environmental-forecasting/download-toolbox)
+![GitHub forks](https://img.shields.io/github/forks/environmental-forecasting/download-toolbox?style=social)
+![GitHub forks](https://img.shields.io/github/stars/environmental-forecasting/download-toolbox?style=social)
 
 This is the core python library for the download toolbox utilities used by BAS 
 data pipelines.
@@ -15,18 +15,19 @@ Contact `jambyr <at> bas <dot> ac <dot> uk` if you want further information.
 
 ## Table of contents
 
-* [Overview](#overview)
 * [Installation](#installation)
 * [Implementation](#implementation)
+* [Basic Principles](#basic-principles)
+* [Limitations](#limitations)
 * [Contributing](#contributing)
 * [Credits](#credits)
 * [License](#license)
 
 ## Installation
 
-Not currently released to pip.
+`pip install download-toolbox`
 
-Please refer to [the contribution guidelines for more information.](CONTRIBUTING.rst)
+Please refer to [the contribution guidelines for more information.](CONTRIBUTING.md)
 
 ## Implementation
 
@@ -67,11 +68,11 @@ Other stubs probably don't work, unless I forgot to update these docs!
 
 ## Contributing 
 
-Please refer to [the contribution guidelines for more information.](CONTRIBUTING.rst)
+Please refer to [the contribution guidelines for more information.](CONTRIBUTING.md)
 
 ## Credits
 
-<a href="https://github.com/antarctica/download-toolbox/graphs/contributors"><img src="https://contrib.rocks/image?repo=antarctica/download-toolbox" /></a>
+<a href="https://github.com/environmental-forecasting/download-toolbox/graphs/contributors"><img src="https://contrib.rocks/image?repo=environmental-forecasting/download-toolbox" /></a>
 
 ## License
 

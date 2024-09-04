@@ -1,4 +1,5 @@
 History
 =======
 
-.. literalinclude:: ../HISTORY.md
+.. include:: ../HISTORY.md
+    :parser: myst

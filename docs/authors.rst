@@ -1,5 +1,5 @@
 Authors
 =======
 
-.. literalinclude:: ../AUTHORS.md
-
+.. include:: ../AUTHORS.md
+    :parser: myst

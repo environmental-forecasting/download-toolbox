@@ -1,5 +1,5 @@
 Contributing
 ============
 
-.. literalinclude:: ../CONTRIBUTING.md
-
+.. include:: ../CONTRIBUTING.md
+    :parser: myst
