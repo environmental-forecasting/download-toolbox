@@ -1,4 +1,4 @@
-jinja2
-Sphinx
-sphinx_rtd_theme
-myst_parser
+mkdocs
+mkdocstrings[python]
+markdown-include
+mkdocs-material

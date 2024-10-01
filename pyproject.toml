@@ -72,11 +72,6 @@ dev = [
   "importlib_metadata",
   "pre-commit"
 ]
-docs = [
-  "jinja2",
-  "Sphinx",
-  "myst_parser"
-]
 
 [project.urls]
 "Homepage" = "https://icenet.ai/"

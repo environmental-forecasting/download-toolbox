@@ -6,12 +6,12 @@
 ![GitHub forks](https://img.shields.io/github/forks/environmental-forecasting/download-toolbox?style=social)
 ![GitHub forks](https://img.shields.io/github/stars/environmental-forecasting/download-toolbox?style=social)
 
-This is the core python library for the download toolbox utilities used by BAS 
-data pipelines.
+This is a python library providing CLI operations allowing users to download 
+common environmental datasets for use in data pipelines. We use this within our 
+optimisation and machine learning pipelines within BAS and it should be flexible 
+enough to adapt to many different use cases.
 
-This is only just getting started, more info will appear soon.
-
-Contact `jambyr <at> bas <dot> ac <dot> uk` if you want further information.
+Contact `digitalinnovation <at> bas <dot> ac <dot> uk` if you want further information.
 
 ## Table of contents
 
@@ -27,7 +27,7 @@ Contact `jambyr <at> bas <dot> ac <dot> uk` if you want further information.
 
 `pip install download-toolbox`
 
-Please refer to [the contribution guidelines for more information.](CONTRIBUTING.md)
+Please refer to [the contribution guidelines for more information][1].
 
 ## Implementation
 
@@ -64,11 +64,11 @@ hopefully be dealt with in time! They likely don't have issues related, yet.
 * download_era5
 * download_osisaf
 
-Other stubs probably don't work, unless I forgot to update these docs!
+Other stubs might not work, but there is a chance I'll forget to update these docs!
 
 ## Contributing 
 
-Please refer to [the contribution guidelines for more information.](CONTRIBUTING.md)
+Please refer to [the contribution guidelines for more information][1].
 
 ## Credits
 
@@ -76,4 +76,7 @@ Please refer to [the contribution guidelines for more information.](CONTRIBUTING
 
 ## License
 
-This is licensed using the [MIT License](LICENSE)
+This is licensed using the [MIT License][2].
+
+[1]: https://github.com/environmental-forecasting/download-toolbox/CONTRIBUTING.md
+[2]: https://github.com/environmental-forecasting/download-toolbox/LICENSE

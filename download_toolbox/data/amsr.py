@@ -11,7 +11,7 @@ from download_toolbox.location import Location
 from download_toolbox.time import Frequency
 
 
-var_remove_list = ["polar_stereographic", "land"]
+var_remove_list = []  # ["polar_stereographic", "land"]
 
 
 class AMSRDatasetConfig(DatasetConfig):
