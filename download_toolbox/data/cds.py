@@ -227,8 +227,7 @@ def get_era5_available_date_range(dataset: str = "reanalysis-era5-single-levels"
 
 
 def main():
-    args = download_args(choices=["cdsapi", "toolbox"],
-                         # TODO: frequency
+    args = download_args(# TODO: frequency
                          workers=True)
 
     logging.info("ERA5 Data Downloading")
@@ -253,8 +252,7 @@ def main():
         start_date=args.start_date,
         end_date=args.end_date,
         max_threads=args.workers,
-        request_frequency=getattr(Frequency, args.output_group_by),
-        use_toolbox=args.choice == "toolbox"
+        request_frequency=getattr(Frequency, args.output_group_by)
     )
     era5.download()
 
