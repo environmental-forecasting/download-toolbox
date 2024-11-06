@@ -49,15 +49,12 @@ class ERA5Downloader(ThreadedDownloader):
     def __init__(self,
                  dataset: ERA5DatasetConfig,
                  *args,
-                 use_toolbox: bool = False,
                  show_progress: bool = False,
                  start_date: object,
                  **kwargs):
         era5_start = dt.date(1940, 1, 1)
         self.client = cds.Client(progress=show_progress)
         logging.getLogger("cdsapi").setLevel(logging.WARNING)
-
-        self._use_toolbox = use_toolbox
 
         if start_date < era5_start:
             raise DownloaderError("{} is before the limited date for ERA5 of {}".
@@ -73,8 +70,6 @@ class ERA5Downloader(ThreadedDownloader):
                          **kwargs)
 
         self.download_method = self._single_api_download
-        if use_toolbox:
-            self.download_method = self._single_toolbox_download
 
         if self.max_threads > 10:
             logging.info("Upping connection limit for max_threads > 10")
@@ -83,17 +78,6 @@ class ERA5Downloader(ThreadedDownloader):
                 pool_maxsize=self.max_threads
             )
             self.client.session.mount("https://", adapter)
-
-    def _single_toolbox_download(self,
-                                 var_config: object,
-                                 req_dates: object) -> list:
-        """Implements a single download from CDS Toolbox API
-
-        :param var_config:
-        :param req_dates: the request date
-        """
-
-        raise RuntimeError("Toolbox downloads are not yet implemented in download-toolbox")
 
     def _single_api_download(self,
                              var_config: object,
