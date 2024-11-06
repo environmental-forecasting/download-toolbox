@@ -220,6 +220,7 @@ class DatasetConfig(DataCollection):
         return ds
 
     def save_data_for_config(self,
+                             combine_method: str = "by_coords",
                              rename_var_list: dict = None,
                              source_ds: object = None,
                              source_files: list = None,
@@ -236,7 +237,8 @@ class DatasetConfig(DataCollection):
             try:
                 logging.debug("Opening source files: {}".format(pformat(source_files)))
                 ds = xr.open_mfdataset(source_files,
-                                       combine="by_coords",
+                                       combine=combine_method,
+                                       concat_dim=None if combine_method == "by_coords" else "time",
                                        parallel=True)
             except ValueError as e:
                 logging.exception("Could not open files {} with error".format(source_files))

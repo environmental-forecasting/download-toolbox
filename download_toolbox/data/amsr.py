@@ -135,6 +135,7 @@ def main():
     )
     sic.download()
     dataset.save_data_for_config(
+        combine_method="nested",
         rename_var_list=dict(z="siconca"),
         source_files=sic.files_downloaded,
         time_dim_values=[date for date in sic.dates if date not in sic.missing_dates],
