@@ -5,6 +5,7 @@ import requests.adapters
 import os
 
 import cdsapi as cds
+import pandas as pd
 import xarray as xr
 
 from download_toolbox.dataset import DatasetConfig
@@ -121,6 +122,13 @@ class ERA5Downloader(ThreadedDownloader):
             retrieve_dict["pressure_level"] = [var_config.level]
         dataset = "reanalysis-era5-{}{}".format(level_id, "-monthly-means" if monthly_request else "")
 
+        _, date_end = get_era5_available_date_range(dataset)
+
+        # TODO: This updates to dates available for download, prevents
+        #       redundant downloads but, requires work to prevent
+        #       postprocess method from running if no downloaded file.
+        req_dates = [date for date in req_dates if date <= date_end]
+
         if not monthly_request:
             retrieve_dict["day"] = ["{:02d}".format(d) for d in range(1, 32)]
             # retrieve_dict["time"] = ["{:02d}:00".format(h) for h in range(0, 24)]
@@ -145,13 +153,44 @@ class ERA5Downloader(ThreadedDownloader):
             return []
 
         ds = xr.open_dataset(temp_download_path)
-        ds = ds.rename({list(ds.data_vars)[0]: var_config.name})
+
+        # New CDSAPI file holds more data_vars than just variable.
+        # Omit them when figuring out default CDS variable name.
+        omit_vars = ("number", "expvar")
+        data_vars = set(ds.data_vars)
+        nom = list(data_vars.difference(omit_vars))[0]
+        rename_vars = {}
+        if "valid_time" in ds:
+            rename_vars.update({"valid_time": "time"})
+        rename_vars.update({nom: var_config.name})
+        da = getattr(ds.rename(rename_vars), var_config.name)
+
+        # This data downloader handles different pressure_levels in independent
+        # files rather than storing them all in separate dimension of one array/file.
+        if "pressure_level" in da.dims:
+            da = da.squeeze(dim="pressure_level").drop_vars("pressure_level")
+        if "number" in da.coords:
+            da = da.drop_vars("number")
+
+        # Removing some coord attribute definition
+        if "coordinates" in da.attrs:
+            omit_attrs = ["number", "expver", "isobaricInhPa"]
+            attributes = da.attrs["coordinates"].replace("valid_time", "time").split()
+            attributes = [attr for attr in attributes if attr not in omit_attrs]
+            da.attrs["coordinates"] = " ".join(attributes)
+
+        # Bryn Note:
+        # expver = 1: ERA5
+        # expver = 5: ERA5T
+        # The latest 3 months of data is ERA5T and may be subject to changes.
+        # Data prior to this is from ERA5.
+        # The new CDSAPI returns combined data when `reanalysis` is requested.
         if 'expver' in ds.coords:
-            logging.warning("expvers {} in coordinates, will process out but "
-                            "this needs further work: expver needs storing for "
-                            "later overwriting".format(ds.expver))
+            logging.warning("expver in coordinates, new cdsapi returns ERA5 and "
+                            "ERA5T combined, this needs further work: expver needs "
+                            "storing for later overwriting")
             # Ref: https://confluence.ecmwf.int/pages/viewpage.action?pageId=173385064
-            ds = ds.sel(expver=1).combine_first(ds.sel(expver=5))
+            # da = da.sel(expver=1).combine_first(da.sel(expver=5))
         ds.to_netcdf(download_path)
         ds.close()
 
@@ -166,6 +205,25 @@ class ERA5Downloader(ThreadedDownloader):
                          req_dates: object) -> list:
         logging.warning("You're not going to get data by calling this! "
                         "Set download_method to an actual implementation.")
+
+
+def get_era5_available_date_range(dataset: str = "reanalysis-era5-single-levels"):
+    """Returns the time range for which ERA5(T) data is available.
+    Args:
+        dataset: Dataset for which available time range should be returned.
+    Returns:
+        date_start: Earliest time data is available from.
+        date_end: Latest time data available.
+    """
+    location = f"https://cds.climate.copernicus.eu/api/catalogue/v1/collections/{dataset}"
+    res = requests.get(location)
+
+    temporal_interval = res.json()["extent"]["temporal"]["interval"][0]
+    time_start, time_end = temporal_interval
+
+    date_start = pd.Timestamp(pd.to_datetime(time_start).date())
+    date_end = pd.Timestamp(pd.to_datetime(time_end).date())
+    return date_start, date_end
 
 
 def main():

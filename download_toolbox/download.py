@@ -45,6 +45,7 @@ class Downloader(metaclass=abc.ABCMeta):
 
         self._dates = [pd.to_datetime(date).date() for date in
                        pd.date_range(start_date, end_date, freq=dataset.frequency.freq)]
+
         self._delete = delete_tempfiles
         self._download = download
         self._drop_vars = list() if drop_vars is None else drop_vars
