@@ -34,12 +34,12 @@ class Downloader(metaclass=abc.ABCMeta):
                  delete_tempfiles: bool = True,
                  download: bool = True,
                  drop_vars: list = None,
-                 end_date: object,
+                 end_date: list,
                  postprocess: bool = True,
                  request_frequency: object = Frequency.MONTH,
                  source_min_frequency: object = Frequency.DAY,
                  source_max_frequency: object = Frequency.DAY,
-                 start_date: object,
+                 start_date: list,
                  **kwargs):
         super().__init__()
 

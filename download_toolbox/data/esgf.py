@@ -321,7 +321,6 @@ class CMIP6LegacyDownloader(Downloader):
 
 def main():
     args = download_args(
-        dates=True,
         extra_args=[
             (["--source"], dict(type=str, default="MRI-ESM2-0")),
             (["--member"], dict(type=str, default="r1i1p1f1")),
@@ -353,20 +352,20 @@ def main():
         overwrite=args.overwrite_config,
     )
 
-    # implementation = CMIP6LegacyDownloader if not args.pyesgf else CMIP6PyESGFDownloader
-    cmip6 = CMIP6LegacyDownloader(
-        dataset=dataset,
-        start_date=args.start_date,
-        end_date=args.end_date,
-        delete_tempfiles=args.delete,
-        max_threads=args.workers,
-        exclude_nodes=args.exclude_server,
-        request_frequency=getattr(Frequency, args.output_group_by),
-    )
+    for start_date, end_date in zip(args.start_dates, args.end_dates):
+        logging.info("Downloading between {} and {}".format(start_date, end_date))
+        cmip6 = CMIP6LegacyDownloader(
+            dataset=dataset,
+            start_date=start_date,
+            end_date=end_date,
+            delete_tempfiles=args.delete,
+            max_threads=args.workers,
+            exclude_nodes=args.exclude_server,
+            request_frequency=getattr(Frequency, args.output_group_by),
+        )
 
-    logging.info("CMIP downloading: {} {}".format(args.source, args.member))
-    cmip6.download()
-    dataset.save_data_for_config(
-        source_files=cmip6.files_downloaded,
-    )
-
+        logging.info("CMIP downloading: {} {}".format(args.source, args.member))
+        cmip6.download()
+        dataset.save_data_for_config(
+            source_files=cmip6.files_downloaded,
+        )

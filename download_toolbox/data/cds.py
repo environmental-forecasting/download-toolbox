@@ -156,9 +156,19 @@ class ERA5Downloader(ThreadedDownloader):
 
         # New CDSAPI file holds more data_vars than just variable.
         # Omit them when figuring out default CDS variable name.
-        omit_vars = ("number", "expvar")
+        omit_vars = ("number", "expver")
         data_vars = set(ds.data_vars)
-        nom = list(data_vars.difference(omit_vars))[0]
+
+        var_list = list(data_vars.difference(omit_vars))
+        if not var_list:
+            raise ValueError(f"No variables found in file")
+        elif len(var_list) > 1:
+            raise ValueError(f"""Multiple variables found in data file!
+                                 There should only be one variable.
+                                 {var_list}"""
+                            )
+        nom = var_list[0]
+
         rename_vars = {}
         if "valid_time" in ds:
             rename_vars.update({"valid_time": "time"})
@@ -227,8 +237,7 @@ def get_era5_available_date_range(dataset: str = "reanalysis-era5-single-levels"
 
 
 def main():
-    args = download_args(# TODO: frequency
-                         workers=True)
+    args = download_args(workers=True)
 
     logging.info("ERA5 Data Downloading")
 
@@ -247,16 +256,18 @@ def main():
         overwrite=args.overwrite_config,
     )
 
-    era5 = ERA5Downloader(
-        dataset,
-        start_date=args.start_date,
-        end_date=args.end_date,
-        max_threads=args.workers,
-        request_frequency=getattr(Frequency, args.output_group_by)
-    )
-    era5.download()
+    for start_date, end_date in zip(args.start_dates, args.end_dates):
+        logging.info("Downloading between {} and {}".format(start_date, end_date))
+        era5 = ERA5Downloader(
+            dataset,
+            start_date=start_date,
+            end_date=end_date,
+            max_threads=args.workers,
+            request_frequency=getattr(Frequency, args.output_group_by)
+        )
+        era5.download()
 
-    dataset.save_data_for_config(
-        source_files=era5.files_downloaded,
-        var_filter_list=["lambert_azimuthal_equal_area"],
-    )
+        dataset.save_data_for_config(
+            source_files=era5.files_downloaded,
+            var_filter_list=["lambert_azimuthal_equal_area"],
+        )

@@ -127,17 +127,19 @@ def main():
         overwrite=args.overwrite_config,
     )
 
-    sic = AMSRDownloader(
-        dataset,
-        max_threads=args.workers,
-        start_date=args.start_date,
-        end_date=args.end_date,
-    )
-    sic.download()
-    dataset.save_data_for_config(
-        combine_method="nested",
-        rename_var_list=dict(z="siconca"),
-        source_files=sic.files_downloaded,
-        time_dim_values=[date for date in sic.dates if date not in sic.missing_dates],
-        var_filter_list=var_remove_list
-    )
+    for start_date, end_date in zip(args.start_dates, args.end_dates):
+        logging.info("Downloading between {} and {}".format(start_date, end_date))
+        sic = AMSRDownloader(
+            dataset,
+            max_threads=args.workers,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        sic.download()
+        dataset.save_data_for_config(
+            combine_method="nested",
+            rename_var_list=dict(z="siconca"),
+            source_files=sic.files_downloaded,
+            time_dim_values=[date for date in sic.dates if date not in sic.missing_dates],
+            var_filter_list=var_remove_list
+        )

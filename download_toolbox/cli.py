@@ -112,10 +112,10 @@ def download_args(choices: object = None,
         ap.add_argument("-c", "--choice", choices=choices, default=choices[0])
 
     if dates:
-        pos_args = [["start_date"], ["end_date"]] if not dates_optional else \
-            [["-sd", "--start-date"], ["-ed", "--end-date"]]
-        ap.add_argument(*pos_args[0], type=date_arg, default=None)
-        ap.add_argument(*pos_args[1], type=date_arg, default=None)
+        pos_args = [["start_dates"], ["end_dates"]] if not dates_optional else \
+            [["-sd", "--start-dates"], ["-ed", "--end-dates"]]
+        ap.add_argument(*pos_args[0], type=dates_arg, default=None)
+        ap.add_argument(*pos_args[1], type=dates_arg, default=None)
 
     freq_avail = [_.name for _ in list(Frequency)]
 
