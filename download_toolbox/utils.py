@@ -96,12 +96,15 @@ class DaskWrapper:
                  dask_port: int = 8888,
                  dask_timeouts: int = 60,
                  dask_tmp_dir: object = "/tmp",
-                 workers: int = 8):
+                 workers: int = 8,
+                 scheduler: str = "single-threaded",
+                 ):
 
         self._dashboard_port = dask_port
         self._timeout = dask_timeouts
         self._tmp_dir = dask_tmp_dir
         self._workers = workers
+        self._scheduler = scheduler
 
     def dask_process(self,
                      *args,
@@ -117,7 +120,9 @@ class DaskWrapper:
             "temporary_directory": self._tmp_dir,
             "distributed.comm.timeouts.connect": self._timeout,
             "distributed.comm.timeouts.tcp": self._timeout,
-        }):
+            # "scheduler": self._scheduler, # Fix to "single-threaded" for netCDF4 >=1.6.1 not thread-safe.
+        }
+        ):
             cluster = LocalCluster(
                 dashboard_address=dashboard,
                 n_workers=self._workers,

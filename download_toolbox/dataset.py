@@ -207,7 +207,9 @@ class DatasetConfig(DataCollection):
         logging.debug(pformat(var_files))
 
         # TODO: where's my parallel mfdataset please!?
-        with dask.config.set(**{'array.slicing.split_large_chunks': True}):
+        with dask.config.set(**{'array.slicing.split_large_chunks': True,
+                                # "scheduler": self._scheduler, # Fix to "single-threaded" for netCDF4 >=1.6.1 not thread-safe.
+                                }):
             ds = xr.open_mfdataset(
                 var_files,
                 combine="nested",
