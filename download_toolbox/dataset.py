@@ -239,7 +239,9 @@ class DatasetConfig(DataCollection):
                 ds = xr.open_mfdataset(source_files,
                                        combine=combine_method,
                                        concat_dim=None if combine_method == "by_coords" else "time",
-                                       parallel=True)
+                                       parallel=True,
+                                       engine="h5netcdf",
+                                       )
             except ValueError as e:
                 logging.exception("Could not open files {} with error".format(source_files))
                 raise DataSetError(e)
