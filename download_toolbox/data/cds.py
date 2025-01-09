@@ -8,6 +8,8 @@ import cdsapi as cds
 import pandas as pd
 import xarray as xr
 
+from pprint import pformat
+
 from download_toolbox.dataset import DatasetConfig
 from download_toolbox.cli import download_args
 from download_toolbox.download import ThreadedDownloader, DownloaderError
@@ -103,17 +105,18 @@ class ERA5Downloader(ThreadedDownloader):
         os.makedirs(os.path.dirname(download_path), exist_ok=True)
 
         retrieve_dict = {
-            "product_type": product_type,
+            "product_type": [product_type,],
             "variable": self.dataset.cdi_map[var_config.prefix],
-            "year": int(req_dates[0].year),
+            "year": [int(req_dates[0].year),],
             "month": list(set(["{:02d}".format(rd.month)
                                for rd in sorted(req_dates)])),
             # TODO: assumption about the time of day!
-            "time": "12:00",
+            "time": ["12:00",],
             "format": "netcdf",
             # TODO: explicit, but should be implicit
             "grid": [0.25, 0.25],
             "area": self.dataset.location.bounds,
+            "download_format": "unarchived"
         }
 
         level_id = "single-levels"
@@ -139,7 +142,7 @@ class ERA5Downloader(ThreadedDownloader):
 
         try:
             logging.info("Downloading data for {}...".format(var_config.name))
-
+            logging.debug("Request dataset {} with:\n".format(pformat(retrieve_dict)))
             self.client.retrieve(
                 dataset,
                 retrieve_dict,
@@ -201,8 +204,9 @@ class ERA5Downloader(ThreadedDownloader):
                             "storing for later overwriting")
             # Ref: https://confluence.ecmwf.int/pages/viewpage.action?pageId=173385064
             # da = da.sel(expver=1).combine_first(da.sel(expver=5))
-        ds.to_netcdf(download_path)
-        ds.close()
+        logging.info("Saving corrected ERA5 file to {}".format(download_path))
+        da.to_netcdf(download_path)
+        da.close()
 
         if os.path.exists(temp_download_path):
             logging.debug("Removing {}".format(temp_download_path))

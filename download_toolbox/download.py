@@ -138,8 +138,6 @@ class Downloader(metaclass=abc.ABCMeta):
 class ThreadedDownloader(Downloader, metaclass=ABCMeta):
     """Data downloader base class for batching downloading
 
-
-
     :param dates:
     :param delete_tempfiles:
     :param download:
