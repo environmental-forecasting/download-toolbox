@@ -30,6 +30,7 @@ class AMSRDatasetConfig(DatasetConfig):
 
         super().__init__(identifier="amsr2_{:1.3f}".format(resolution).replace(".", "")
                          if identifier is None else identifier,
+                         # TODO: see below, GH#10 on consistency of naming in datasets, this should be in IceNet
                          var_names=["siconca"] if var_names is None else var_names,
                          levels=[None] if levels is None else levels,
                          **kwargs)
@@ -138,6 +139,7 @@ def main():
         sic.download()
         dataset.save_data_for_config(
             combine_method="nested",
+            # TODO: This should ideally be in IceNet? There is a bigger issue of naming to address (GH#10)
             rename_var_list=dict(z="siconca"),
             source_files=sic.files_downloaded,
             time_dim_values=[date for date in sic.dates if date not in sic.missing_dates],

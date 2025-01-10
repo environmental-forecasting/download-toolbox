@@ -269,7 +269,7 @@ class DatasetConfig(DataCollection):
         # Rename if requested
         if rename_var_list:
             logging.info("Renaming {} variables if available".format(rename_var_list))
-            ds = ds.rename_vars({k: v for k, v in rename_var_list.items() if k in ds.data_vars})
+            ds = ds.rename({k: v for k, v in rename_var_list.items() if k in list(ds.coords) + list(ds.data_vars)})
 
         # For all variables in ds, determine if there are destinations available
         for var_config in [vc for vc in self.variables if vc.name in ds.data_vars]:
