@@ -158,7 +158,7 @@ class ERA5Downloader(ThreadedDownloader):
 
         # New CDSAPI file holds more data_vars than just variable.
         # Omit them when figuring out default CDS variable name.
-        omit_vars = {"number", "expver", "time", "date"}
+        omit_vars = {"number", "expver", "time", "date", "valid_time", "latitude", "longitude"}
         data_vars = set(ds.data_vars)
 
         var_list = list(data_vars.difference(omit_vars))
@@ -173,10 +173,14 @@ class ERA5Downloader(ThreadedDownloader):
         var_name = var_config.name
 
         # Rename time and variable names for consistency
-        src_time_var_name = "date" if monthly_request else "valid_time"
-        rename_vars = {src_time_var_name: "time",
+        rename_vars = {
                        src_var_name: var_name,
                        }
+        if "date" in ds:
+            rename_vars.update({"date": "time"})
+        elif "valid_time" in ds:
+            rename_vars.update({"valid_time": "time"})
+
         da = getattr(ds.rename(rename_vars), var_name)
 
         # This data downloader handles different pressure_levels in independent
@@ -207,12 +211,6 @@ class ERA5Downloader(ThreadedDownloader):
             # Convert to a DataArray with one time dimension.
             if np.isscalar(hours_since_ref_date):
                 da = da.expand_dims(time=[hours_since_ref_date])
-
-            da.time.attrs = {
-                "long_name": "time",
-                "units": "hours since 1900-01-01",
-                "calendar": "gregorian",
-            }
 
         # Bryn Note:
         # expver = 1: ERA5
