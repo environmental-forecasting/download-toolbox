@@ -1,10 +1,12 @@
 import datetime as dt
 import logging
+import re
 import requests
 import requests.adapters
 import os
 
 import cdsapi as cds
+import numpy as np
 import pandas as pd
 import xarray as xr
 
@@ -127,7 +129,7 @@ class ERA5Downloader(ThreadedDownloader):
         # TODO: This updates to dates available for download, prevents
         #       redundant downloads but, requires work to prevent
         #       postprocess method from running if no downloaded file.
-        req_dates = [date for date in req_dates if date <= date_end]
+        #req_dates = [date for date in req_dates if date <= date_end]
 
         if not monthly_request:
             retrieve_dict["day"] = ["{:02d}".format(d) for d in range(1, 32)]
@@ -156,7 +158,7 @@ class ERA5Downloader(ThreadedDownloader):
 
         # New CDSAPI file holds more data_vars than just variable.
         # Omit them when figuring out default CDS variable name.
-        omit_vars = ("number", "expver")
+        omit_vars = {"number", "expver", "time", "date"}
         data_vars = set(ds.data_vars)
 
         var_list = list(data_vars.difference(omit_vars))
@@ -167,13 +169,15 @@ class ERA5Downloader(ThreadedDownloader):
                                  There should only be one variable.
                                  {var_list}"""
                             )
-        nom = var_list[0]
+        src_var_name = var_list[0]
+        var_name = var_config.name
 
-        rename_vars = {}
-        if "valid_time" in ds:
-            rename_vars.update({"valid_time": "time"})
-        rename_vars.update({nom: var_config.name})
-        da = getattr(ds.rename(rename_vars), var_config.name)
+        # Rename time and variable names for consistency
+        src_time_var_name = "date" if monthly_request else "valid_time"
+        rename_vars = {src_time_var_name: "time",
+                       src_var_name: var_name,
+                       }
+        da = getattr(ds.rename(rename_vars), var_name)
 
         # This data downloader handles different pressure_levels in independent
         # files rather than storing them all in separate dimension of one array/file.
@@ -182,12 +186,33 @@ class ERA5Downloader(ThreadedDownloader):
         if "number" in da.coords:
             da = da.drop_vars("number")
 
-        # Removing some coord attribute definition
+        # Updating coord attribute definitions (needs file read in with `decode_cf=False`)
         if "coordinates" in da.attrs:
             omit_attrs = ["number", "expver", "isobaricInhPa"]
-            attributes = da.attrs["coordinates"].replace("valid_time", "time").split()
+            attributes = re.sub(r"valid_time|date", "time", da.attrs["coordinates"]).split()
             attributes = [attr for attr in attributes if attr not in omit_attrs]
             da.attrs["coordinates"] = " ".join(attributes)
+
+        if monthly_request:
+            # Convert integer days from CSDAPI downloaded file to datetime
+            dates = pd.to_datetime(da["time"].values, format="%Y%m%d")
+
+            # Calculate hours since 1900-01-01 (matching old CDSAPI code)
+            # Time was set to midday.
+            reference_date = np.datetime64("1900-01-01T00:00:00")
+            timedeltas = dates - reference_date
+            hours_since_ref_date = timedeltas / np.timedelta64(1, "h") + 12
+
+            # Cover case where requesting just one month of data, will return a scalar float.
+            # Convert to a DataArray with one time dimension.
+            if np.isscalar(hours_since_ref_date):
+                da = da.expand_dims(time=[hours_since_ref_date])
+
+            da.time.attrs = {
+                "long_name": "time",
+                "units": "hours since 1900-01-01",
+                "calendar": "gregorian",
+            }
 
         # Bryn Note:
         # expver = 1: ERA5
@@ -201,8 +226,9 @@ class ERA5Downloader(ThreadedDownloader):
                             "storing for later overwriting")
             # Ref: https://confluence.ecmwf.int/pages/viewpage.action?pageId=173385064
             # da = da.sel(expver=1).combine_first(da.sel(expver=5))
-        ds.to_netcdf(download_path)
-        ds.close()
+
+        da.to_netcdf(download_path)
+        da.close()
 
         if os.path.exists(temp_download_path):
             logging.debug("Removing {}".format(temp_download_path))
