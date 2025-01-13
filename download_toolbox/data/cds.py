@@ -6,7 +6,6 @@ import requests.adapters
 import os
 
 import cdsapi as cds
-import numpy as np
 import pandas as pd
 import xarray as xr
 
@@ -129,7 +128,7 @@ class ERA5Downloader(ThreadedDownloader):
         # TODO: This updates to dates available for download, prevents
         #       redundant downloads but, requires work to prevent
         #       postprocess method from running if no downloaded file.
-        #req_dates = [date for date in req_dates if date <= date_end]
+        req_dates = [date for date in req_dates if date <= date_end.date()]
 
         if not monthly_request:
             retrieve_dict["day"] = ["{:02d}".format(d) for d in range(1, 32)]
@@ -196,21 +195,6 @@ class ERA5Downloader(ThreadedDownloader):
             attributes = re.sub(r"valid_time|date", "time", da.attrs["coordinates"]).split()
             attributes = [attr for attr in attributes if attr not in omit_attrs]
             da.attrs["coordinates"] = " ".join(attributes)
-
-        if monthly_request:
-            # Convert integer days from CSDAPI downloaded file to datetime
-            dates = pd.to_datetime(da["time"].values, format="%Y%m%d")
-
-            # Calculate hours since 1900-01-01 (matching old CDSAPI code)
-            # Time was set to midday.
-            reference_date = np.datetime64("1900-01-01T00:00:00")
-            timedeltas = dates - reference_date
-            hours_since_ref_date = timedeltas / np.timedelta64(1, "h") + 12
-
-            # Cover case where requesting just one month of data, will return a scalar float.
-            # Convert to a DataArray with one time dimension.
-            if np.isscalar(hours_since_ref_date):
-                da = da.expand_dims(time=[hours_since_ref_date])
 
         # Bryn Note:
         # expver = 1: ERA5
