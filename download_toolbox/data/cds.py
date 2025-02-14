@@ -172,6 +172,7 @@ class ERA5Downloader(ThreadedDownloader):
                             )
         nom = var_list[0]
 
+        # TODO: duplicated code, this has been copied in a wonky way!
         rename_vars = {}
         if "valid_time" in ds:
             rename_vars.update({"valid_time": "time"})

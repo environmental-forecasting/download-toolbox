@@ -24,6 +24,7 @@ from download_toolbox.time import Frequency
 class CMIP6DatasetConfig(DatasetConfig):
 
     DAY_TABLE_MAP = {
+        'siconc': 'SI{}',
         'siconca': 'SI{}',
         'tas': '{}',
         'ta': '{}',
@@ -40,6 +41,7 @@ class CMIP6DatasetConfig(DatasetConfig):
     }
 
     MONTH_TABLE_MAP = {
+        'siconc': 'SI{}',
         'siconca': 'SI{}',
         'tas': '{}',
         'ta': '{}',
@@ -56,9 +58,10 @@ class CMIP6DatasetConfig(DatasetConfig):
     }
 
     GRID_MAP = {
+        'siconc': 'gn',
         'siconca': 'gn',
         'tas': 'gn',
-        'ta': 'gn',
+        'ta': 'gr',
         'tos': 'gr',
         'hus': 'gn',
         'psl': 'gn',
@@ -128,20 +131,22 @@ class CMIP6DatasetConfig(DatasetConfig):
         return self._table_map
 
 
-class CMIP6LegacyDownloader(Downloader):
+class CMIP6LegacyDownloader(ThreadedDownloader):
     # Prioritise European first, US last, avoiding unnecessary queries
     # against nodes further afield (all traffic has a cost, and the coverage
     # of local nodes is more than enough)
-    ESGF_NODES = ("aims3.llnl.gov",
-                  "esgf.ceda.ac.uk",
-                  "esg1.umr-cnrm.fr",
-                  "vesg.ipsl.upmc.fr",
-                  "esgf3.dkrz.de",
-                  "esgf.bsc.es",
-                  "esgf-data.csc.fi",
-                  "noresg.nird.sigma2.no",
-                  "esgf-data.ucar.edu",
-                  "esgf-data2.diasjp.net")
+    ESGF_NODES = (
+        "esgf.ceda.ac.uk",
+        #"esg1.umr-cnrm.fr",
+        #"vesg.ipsl.upmc.fr",
+        #"esgf3.dkrz.de",
+        "esgf.bsc.es",
+        #"esgf-data.csc.fi",
+        #"noresg.nird.sigma2.no",
+        #"esgf-data.ucar.edu",
+        #"aims3.llnl.gov",
+        "esgf-data2.diasjp.net",
+    )
 
     def __init__(self,
                  *args,
@@ -182,8 +187,8 @@ class CMIP6LegacyDownloader(Downloader):
             'member_id': self.dataset.member,
             'frequency': self.dataset.frequency.cmip_id,
             'variable_id': var_config.prefix,
-            'table_id': self.dataset.table_map[var_config.prefix],
-            'grid_label': self.dataset.grid_map[var_config.prefix],
+            # 'table_id': self.dataset.table_map[var_config.prefix],
+            # 'grid_label': self.dataset.grid_map[var_config.prefix],
         }
 
         results = []
@@ -202,6 +207,10 @@ class CMIP6LegacyDownloader(Downloader):
                     results.extend(node_results)
                     break
 
+        start_date, end_date = req_dates[0], req_dates[-1]
+        results = [x for x in results if x.endswith("{}.nc".format("-".join([
+            start_date.strftime("%Y%m"), end_date.strftime("%Y%m")])))]
+
         if len(results) == 0:
             logging.warning("NO RESULTS FOUND for {} from ESGF search".format(var_config.name))
         else:
@@ -215,12 +224,12 @@ class CMIP6LegacyDownloader(Downloader):
             try:
                 # http://xarray.pydata.org/en/stable/user-guide/io.html?highlight=opendap#opendap
                 # Avoid 500MB DAP request limit
-                cmip6_da = xr.open_mfdataset(results,
+                cmip6_ds = xr.open_mfdataset(results,
                                              combine='by_coords',
-                                             chunks={'time': '499MB'}
-                                             )[var_config.prefix]
+                                             chunks={'time': '499MB'})
 
-                start_date, end_date = req_dates[0], req_dates[-1]
+                rename_vars = {var_config.prefix: var_config.name}
+                cmip6_da = getattr(cmip6_ds.rename(rename_vars), var_config.name)
 
                 if self.dataset.frequency == Frequency.MONTH and start_date.day > 1:
                     start_date = start_date.replace(day=1)
@@ -234,6 +243,11 @@ class CMIP6LegacyDownloader(Downloader):
 
                 cmip6_da = cmip6_da.sel(lat=slice(self.dataset.location.bounds[2],
                                                   self.dataset.location.bounds[0]))
+
+                # By this point the variable name has stored this info
+                for omit_coord in ["plev", "height"]:
+                    if omit_coord in cmip6_da.coords:
+                        cmip6_da = cmip6_da.drop_vars(omit_coord)
             except (OSError, ValueError, IndexError) as e:
                 raise DownloaderError("Error encountered: {}".format(e))
             else:
