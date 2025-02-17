@@ -43,18 +43,18 @@ class CMIP6DatasetConfig(DatasetConfig):
     MONTH_TABLE_MAP = {
         'siconc': 'SI{}',
         'siconca': 'SI{}',
-        'tas': '{}',
-        'ta': '{}',
+        'tas': 'A{}',
+        'ta': 'A{}',
         'tos': 'O{}',
-        'hus': '{}',
-        'psl': '{}',
-        'rlds': '{}',
-        'rsus': '{}',
-        'rsds': '{}',
+        'hus': 'A{}',
+        'psl': 'A{}',
+        'rlds': 'A{}',
+        'rsus': 'A{}',
+        'rsds': 'A{}',
         'zg': 'A{}',
-        'uas': '{}',
-        'vas': '{}',
-        'ua': '{}'
+        'uas': 'A{}',
+        'vas': 'A{}',
+        'ua': 'A{}'
     }
 
     GRID_MAP = {
@@ -213,7 +213,8 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
 
         if len(results) == 0:
             # TODO: what really happens when we have this?
-            logging.warning("NO RESULTS FOUND for {} from ESGF search".format(var_config.name))
+            logging.warning("NO RESULTS FOUND for {} from ESGF search {}".format(var_config.name,
+                                                                                 ",".join(query.values())))
             return None
         else:
             cmip6_da = None
