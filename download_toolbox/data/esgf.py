@@ -187,8 +187,8 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
             'member_id': self.dataset.member,
             'frequency': self.dataset.frequency.cmip_id,
             'variable_id': var_config.prefix,
-            # 'table_id': self.dataset.table_map[var_config.prefix],
-            # 'grid_label': self.dataset.grid_map[var_config.prefix],
+            'table_id': self.dataset.table_map[var_config.prefix],
+            'grid_label': self.dataset.grid_map[var_config.prefix],
         }
 
         results = []
@@ -212,7 +212,9 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
             start_date.strftime("%Y%m"), end_date.strftime("%Y%m")])))]
 
         if len(results) == 0:
+            # TODO: what really happens when we have this?
             logging.warning("NO RESULTS FOUND for {} from ESGF search".format(var_config.name))
+            return None
         else:
             cmip6_da = None
             download_path = os.path.join(var_config.root_path,
@@ -249,7 +251,7 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
                     if omit_coord in cmip6_da.coords:
                         cmip6_da = cmip6_da.drop_vars(omit_coord)
             except (OSError, ValueError, IndexError) as e:
-                raise DownloaderError("Error encountered: {}".format(e))
+                raise DownloaderError("Error encountered: {} for {}".format(e, results))
             else:
                 logging.info("Writing {} to {}".format(cmip6_da, download_path))
                 os.makedirs(os.path.dirname(download_path), exist_ok=True)
