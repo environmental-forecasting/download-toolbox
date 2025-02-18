@@ -228,7 +228,7 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
 
         start_date, end_date = req_dates[0], req_dates[-1]
         date_proc = lambda s: dt.datetime(int(s[0:4]), int(s[4:6]), 1).date() \
-            if self.dataset.frequency <= Frequency.MONTH else dt.datetime(int(s[0:4]), int(s[4:6]), int(s[6:8]))
+            if self.dataset.frequency <= Frequency.MONTH else dt.datetime(int(s[0:4]), int(s[4:6]), int(s[6:8])).date()
         file_dates = list(zip(results, *[(date_proc(start), date_proc(end)) for start, end in
                                          [df.split("_")[-1].rstrip(".nc").split("-") for df in results]]))
 
