@@ -3,6 +3,7 @@ import os
 import requests
 import warnings
 
+import datetime as dt
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -58,20 +59,38 @@ class CMIP6DatasetConfig(DatasetConfig):
     }
 
     GRID_MAP = {
-        'siconc': 'gn',
-        'siconca': 'gn',
-        'tas': 'gn',
-        'ta': 'gr',
-        'tos': 'gr',
-        'hus': 'gn',
-        'psl': 'gn',
-        'rlds': 'gn',
-        'rsus': 'gn',
-        'rsds': 'gn',
-        'zg': 'gn',
-        'uas': 'gn',
-        'vas': 'gn',
-        'ua': 'gn',
+        "EC-Earth3": {
+            'siconc': 'gr',
+            'siconca': 'gr',
+            'tas': 'gr',
+            'ta': 'gr',
+            'tos': 'gr',
+            'hus': 'gr',
+            'psl': 'gr',
+            'rlds': 'gr',
+            'rsus': 'gr',
+            'rsds': 'gr',
+            'zg': 'gr',
+            'uas': 'gr',
+            'vas': 'gr',
+            'ua': 'gr',
+        },
+        "MRI-ESM2-0": {
+            'siconc': 'gn',
+            'siconca': 'gn',
+            'tas': 'gn',
+            'ta': 'gn',
+            'tos': 'gr',
+            'hus': 'gn',
+            'psl': 'gn',
+            'rlds': 'gn',
+            'rsus': 'gn',
+            'rsds': 'gn',
+            'zg': 'gn',
+            'uas': 'gn',
+            'vas': 'gn',
+            'ua': 'gn',
+        }
     }
 
     def __init__(self,
@@ -188,7 +207,7 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
             'frequency': self.dataset.frequency.cmip_id,
             'variable_id': var_config.prefix,
             'table_id': self.dataset.table_map[var_config.prefix],
-            'grid_label': self.dataset.grid_map[var_config.prefix],
+            'grid_label': self.dataset.grid_map[self.dataset.source][var_config.prefix],
         }
 
         results = []
@@ -207,9 +226,16 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
                     results.extend(node_results)
                     break
 
-        start_date, end_date = req_dates[0], req_dates[-1]
-        results = [x for x in results if x.endswith("{}.nc".format("-".join([
-            start_date.strftime("%Y%m"), end_date.strftime("%Y%m")])))]
+        start_date, end_date = req_dates[0].date(), req_dates[-1].date()
+        date_proc = lambda s: dt.datetime(int(s[0:4]), int(s[4:6]), 1).date() \
+            if self.dataset.frequency <= Frequency.MONTH else dt.datetime(int(s[0:4]), int(s[4:6]), int(s[6:8]))
+        file_dates = list(zip(results, *[(date_proc(start), date_proc(end)) for start, end in
+                                         [df.split("_")[-1].rstrip(".nc").split("-") for df in results]]))
+
+        results = [x[0] for x in file_dates
+                   if start_date <= x[1] <= end_date
+                   or start_date <= x[2] <= end_date
+                   or (x[1] < start_date < end_date < x[2])]
 
         if len(results) == 0:
             # TODO: what really happens when we have this?
