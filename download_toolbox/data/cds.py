@@ -157,22 +157,20 @@ class ERA5Downloader(ThreadedDownloader):
 
         ds = xr.open_dataset(temp_download_path)
 
+        # TODO: there is duplicated / messy code here from CDS API alterations, clean it up
         # New CDSAPI file holds more data_vars than just variable.
         # Omit them when figuring out default CDS variable name.
         omit_vars = ("number", "expver")
         data_vars = set(ds.data_vars)
-
         var_list = list(data_vars.difference(omit_vars))
         if not var_list:
             raise ValueError(f"No variables found in file")
         elif len(var_list) > 1:
             raise ValueError(f"""Multiple variables found in data file!
                                  There should only be one variable.
-                                 {var_list}"""
-                            )
+                                 {var_list}""")
         nom = var_list[0]
 
-        # TODO: duplicated code, this has been copied in a wonky way!
         rename_vars = {}
         if "valid_time" in ds:
             rename_vars.update({"valid_time": "time"})
@@ -183,6 +181,7 @@ class ERA5Downloader(ThreadedDownloader):
         # files rather than storing them all in separate dimension of one array/file.
         if "pressure_level" in da.dims:
             da = da.squeeze(dim="pressure_level").drop_vars("pressure_level")
+
         if "number" in da.coords:
             da = da.drop_vars("number")
 
