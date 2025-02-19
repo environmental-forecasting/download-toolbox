@@ -134,6 +134,10 @@ class Downloader(metaclass=abc.ABCMeta):
     def request_frequency(self) -> Frequency:
         return self._request_frequency
 
+    @property
+    def skipped_dates(self) -> set:
+        return self._skipped_dates
+
 
 class ThreadedDownloader(Downloader, metaclass=ABCMeta):
     """Data downloader base class for batching downloading
