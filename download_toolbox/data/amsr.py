@@ -4,7 +4,7 @@ import os
 import datetime as dt
 
 from download_toolbox.dataset import DatasetConfig, DataSetError
-from download_toolbox.cli import download_args
+from download_toolbox.cli import DownloadArgParser
 from download_toolbox.download import ThreadedDownloader, DownloaderError
 from download_toolbox.utils import HTTPClient
 from download_toolbox.location import Location
@@ -105,14 +105,12 @@ class AMSRDownloader(ThreadedDownloader):
 
 
 def main():
-    args = download_args(var_specs=False,
-                         workers=True,
-                         extra_args=[
-                             (["-r", "--resolution"], dict(
-                                 type=float,
-                                 choices=[3.125, 6.25],
-                                 default=6.25
-                             ))])
+    args = DownloadArgParser().add_workers().add_extra_args([
+        (["-r", "--resolution"], dict(
+            type=float,
+            choices=[3.125, 6.25],
+            default=6.25
+        ))]).parse_args()
 
     logging.info("AMSR-SIC Data Downloading")
     location = Location(

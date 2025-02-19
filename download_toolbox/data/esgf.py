@@ -1,19 +1,13 @@
 import logging
 import os
 import requests
-import warnings
 
 import datetime as dt
-import numpy as np
-import pandas as pd
 import xarray as xr
 
-from pyesgf.search import SearchConnection
-from pyesgf.logon import LogonManager
-
 from download_toolbox.dataset import DatasetConfig, DataSetError
-from download_toolbox.cli import download_args
-from download_toolbox.download import ThreadedDownloader, Downloader, DownloaderError
+from download_toolbox.cli import DownloadArgParser
+from download_toolbox.download import ThreadedDownloader, DownloaderError
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
 
@@ -363,18 +357,15 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
 
 
 def main():
-    args = download_args(
-        extra_args=[
-            (["--source"], dict(type=str, default="MRI-ESM2-0")),
-            (["--member"], dict(type=str, default="r1i1p1f1")),
-            # (["--pyesgf"], dict(default=False, action="store_true")),
-            (("-xs", "--exclude-server"),
-             dict(default=[], nargs="*")),
-            # (("-o", "--grid-override"), dict(required=None, type=str)),
-            (("-g", "--default-grid"), dict(required=None, type=str)),
-        ],
-        workers=True
-    )
+    args = DownloadArgParser().add_var_specs().add_workers().add_extra_args([
+        (["--source"], dict(type=str, default="MRI-ESM2-0")),
+        (["--member"], dict(type=str, default="r1i1p1f1")),
+        # (["--pyesgf"], dict(default=False, action="store_true")),
+        (("-xs", "--exclude-server"),
+         dict(default=[], nargs="*")),
+        # (("-o", "--grid-override"), dict(required=None, type=str)),
+        (("-g", "--default-grid"), dict(required=None, type=str)),
+    ]).parse_args()
 
     logging.info("CMIP6 Data Downloading")
 
@@ -401,7 +392,6 @@ def main():
             dataset=dataset,
             start_date=start_date,
             end_date=end_date,
-            delete_tempfiles=args.delete,
             max_threads=args.workers,
             exclude_nodes=args.exclude_server,
             request_frequency=getattr(Frequency, args.output_group_by),

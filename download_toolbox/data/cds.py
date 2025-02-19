@@ -11,7 +11,7 @@ import xarray as xr
 from pprint import pformat
 
 from download_toolbox.dataset import DatasetConfig
-from download_toolbox.cli import download_args
+from download_toolbox.cli import DownloadArgParser
 from download_toolbox.download import ThreadedDownloader, DownloaderError
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
@@ -246,7 +246,7 @@ def get_era5_available_date_range(dataset: str = "reanalysis-era5-single-levels"
 
 
 def main():
-    args = download_args(workers=True)
+    args = DownloadArgParser().add_var_specs().add_workers().parse_args()
 
     logging.info("ERA5 Data Downloading")
 
