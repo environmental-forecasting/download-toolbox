@@ -5,7 +5,7 @@ import os
 import pandas as pd
 
 from download_toolbox.dataset import DatasetConfig
-from download_toolbox.cli import download_args
+from download_toolbox.cli import DownloadArgParser
 from download_toolbox.download import ThreadedDownloader, DownloaderError
 from download_toolbox.utils import FTPClient
 from download_toolbox.location import Location
@@ -332,8 +332,7 @@ class SICDownloader(ThreadedDownloader):
 
 
 def main():
-    args = download_args(var_specs=False,
-                         workers=True)
+    args = DownloadArgParser().add_workers().parse_args()
 
     logging.info("OSISAF-SIC Data Downloading")
     location = Location(

@@ -1,18 +1,13 @@
 import logging
 import os
 import requests
-import warnings
 
-import numpy as np
-import pandas as pd
+import datetime as dt
 import xarray as xr
 
-from pyesgf.search import SearchConnection
-from pyesgf.logon import LogonManager
-
 from download_toolbox.dataset import DatasetConfig, DataSetError
-from download_toolbox.cli import download_args
-from download_toolbox.download import ThreadedDownloader, Downloader, DownloaderError
+from download_toolbox.cli import DownloadArgParser
+from download_toolbox.download import ThreadedDownloader, DownloaderError
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
 
@@ -24,6 +19,7 @@ from download_toolbox.time import Frequency
 class CMIP6DatasetConfig(DatasetConfig):
 
     DAY_TABLE_MAP = {
+        'siconc': 'SI{}',
         'siconca': 'SI{}',
         'tas': '{}',
         'ta': '{}',
@@ -40,35 +36,55 @@ class CMIP6DatasetConfig(DatasetConfig):
     }
 
     MONTH_TABLE_MAP = {
+        'siconc': 'SI{}',
         'siconca': 'SI{}',
-        'tas': '{}',
-        'ta': '{}',
+        'tas': 'A{}',
+        'ta': 'A{}',
         'tos': 'O{}',
-        'hus': '{}',
-        'psl': '{}',
-        'rlds': '{}',
-        'rsus': '{}',
-        'rsds': '{}',
+        'hus': 'A{}',
+        'psl': 'A{}',
+        'rlds': 'A{}',
+        'rsus': 'A{}',
+        'rsds': 'A{}',
         'zg': 'A{}',
-        'uas': '{}',
-        'vas': '{}',
-        'ua': '{}'
+        'uas': 'A{}',
+        'vas': 'A{}',
+        'ua': 'A{}'
     }
 
     GRID_MAP = {
-        'siconca': 'gn',
-        'tas': 'gn',
-        'ta': 'gn',
-        'tos': 'gr',
-        'hus': 'gn',
-        'psl': 'gn',
-        'rlds': 'gn',
-        'rsus': 'gn',
-        'rsds': 'gn',
-        'zg': 'gn',
-        'uas': 'gn',
-        'vas': 'gn',
-        'ua': 'gn',
+        "EC-Earth3": {
+            'siconc': 'gr',
+            'siconca': 'gr',
+            'tas': 'gr',
+            'ta': 'gr',
+            'tos': 'gr',
+            'hus': 'gr',
+            'psl': 'gr',
+            'rlds': 'gr',
+            'rsus': 'gr',
+            'rsds': 'gr',
+            'zg': 'gr',
+            'uas': 'gr',
+            'vas': 'gr',
+            'ua': 'gr',
+        },
+        "MRI-ESM2-0": {
+            'siconc': 'gn',
+            'siconca': 'gn',
+            'tas': 'gn',
+            'ta': 'gn',
+            'tos': 'gr',
+            'hus': 'gn',
+            'psl': 'gn',
+            'rlds': 'gn',
+            'rsus': 'gn',
+            'rsds': 'gn',
+            'zg': 'gn',
+            'uas': 'gn',
+            'vas': 'gn',
+            'ua': 'gn',
+        }
     }
 
     def __init__(self,
@@ -128,20 +144,22 @@ class CMIP6DatasetConfig(DatasetConfig):
         return self._table_map
 
 
-class CMIP6LegacyDownloader(Downloader):
+class CMIP6LegacyDownloader(ThreadedDownloader):
     # Prioritise European first, US last, avoiding unnecessary queries
     # against nodes further afield (all traffic has a cost, and the coverage
     # of local nodes is more than enough)
-    ESGF_NODES = ("aims3.llnl.gov",
-                  "esgf.ceda.ac.uk",
-                  "esg1.umr-cnrm.fr",
-                  "vesg.ipsl.upmc.fr",
-                  "esgf3.dkrz.de",
-                  "esgf.bsc.es",
-                  "esgf-data.csc.fi",
-                  "noresg.nird.sigma2.no",
-                  "esgf-data.ucar.edu",
-                  "esgf-data2.diasjp.net")
+    ESGF_NODES = (
+        "esgf.ceda.ac.uk",
+        #"esg1.umr-cnrm.fr",
+        #"vesg.ipsl.upmc.fr",
+        #"esgf3.dkrz.de",
+        "esgf.bsc.es",
+        #"esgf-data.csc.fi",
+        #"noresg.nird.sigma2.no",
+        #"esgf-data.ucar.edu",
+        #"aims3.llnl.gov",
+        "esgf-data2.diasjp.net",
+    )
 
     def __init__(self,
                  *args,
@@ -183,7 +201,7 @@ class CMIP6LegacyDownloader(Downloader):
             'frequency': self.dataset.frequency.cmip_id,
             'variable_id': var_config.prefix,
             'table_id': self.dataset.table_map[var_config.prefix],
-            'grid_label': self.dataset.grid_map[var_config.prefix],
+            'grid_label': self.dataset.grid_map[self.dataset.source][var_config.prefix],
         }
 
         results = []
@@ -202,8 +220,22 @@ class CMIP6LegacyDownloader(Downloader):
                     results.extend(node_results)
                     break
 
+        start_date, end_date = req_dates[0], req_dates[-1]
+        date_proc = lambda s: dt.datetime(int(s[0:4]), int(s[4:6]), 1).date() \
+            if self.dataset.frequency <= Frequency.MONTH else dt.datetime(int(s[0:4]), int(s[4:6]), int(s[6:8])).date()
+        file_dates = list(zip(results, *[(date_proc(start), date_proc(end)) for start, end in
+                                         [df.split("_")[-1].rstrip(".nc").split("-") for df in results]]))
+
+        results = [x[0] for x in file_dates
+                   if start_date <= x[1] <= end_date
+                   or start_date <= x[2] <= end_date
+                   or (x[1] < start_date < end_date < x[2])]
+
         if len(results) == 0:
-            logging.warning("NO RESULTS FOUND for {} from ESGF search".format(var_config.name))
+            # TODO: what really happens when we have this?
+            logging.warning("NO RESULTS FOUND for {} from ESGF search {}".format(var_config.name,
+                                                                                 ",".join(query.values())))
+            return None
         else:
             cmip6_da = None
             download_path = os.path.join(var_config.root_path,
@@ -215,12 +247,12 @@ class CMIP6LegacyDownloader(Downloader):
             try:
                 # http://xarray.pydata.org/en/stable/user-guide/io.html?highlight=opendap#opendap
                 # Avoid 500MB DAP request limit
-                cmip6_da = xr.open_mfdataset(results,
+                cmip6_ds = xr.open_mfdataset(results,
                                              combine='by_coords',
-                                             chunks={'time': '499MB'}
-                                             )[var_config.prefix]
+                                             chunks={'time': '499MB'})
 
-                start_date, end_date = req_dates[0], req_dates[-1]
+                rename_vars = {var_config.prefix: var_config.name}
+                cmip6_da = getattr(cmip6_ds.rename(rename_vars), var_config.name)
 
                 if self.dataset.frequency == Frequency.MONTH and start_date.day > 1:
                     start_date = start_date.replace(day=1)
@@ -234,8 +266,13 @@ class CMIP6LegacyDownloader(Downloader):
 
                 cmip6_da = cmip6_da.sel(lat=slice(self.dataset.location.bounds[2],
                                                   self.dataset.location.bounds[0]))
+
+                # By this point the variable name has stored this info
+                for omit_coord in ["plev", "height"]:
+                    if omit_coord in cmip6_da.coords:
+                        cmip6_da = cmip6_da.drop_vars(omit_coord)
             except (OSError, ValueError, IndexError) as e:
-                raise DownloaderError("Error encountered: {}".format(e))
+                raise DownloaderError("Error encountered: {} for {}".format(e, results))
             else:
                 logging.info("Writing {} to {}".format(cmip6_da, download_path))
                 os.makedirs(os.path.dirname(download_path), exist_ok=True)
@@ -320,18 +357,15 @@ class CMIP6LegacyDownloader(Downloader):
 
 
 def main():
-    args = download_args(
-        extra_args=[
-            (["--source"], dict(type=str, default="MRI-ESM2-0")),
-            (["--member"], dict(type=str, default="r1i1p1f1")),
-            # (["--pyesgf"], dict(default=False, action="store_true")),
-            (("-xs", "--exclude-server"),
-             dict(default=[], nargs="*")),
-            # (("-o", "--grid-override"), dict(required=None, type=str)),
-            (("-g", "--default-grid"), dict(required=None, type=str)),
-        ],
-        workers=True
-    )
+    args = DownloadArgParser().add_var_specs().add_workers().add_extra_args([
+        (["--source"], dict(type=str, default="MRI-ESM2-0")),
+        (["--member"], dict(type=str, default="r1i1p1f1")),
+        # (["--pyesgf"], dict(default=False, action="store_true")),
+        (("-xs", "--exclude-server"),
+         dict(default=[], nargs="*")),
+        # (("-o", "--grid-override"), dict(required=None, type=str)),
+        (("-g", "--default-grid"), dict(required=None, type=str)),
+    ]).parse_args()
 
     logging.info("CMIP6 Data Downloading")
 
@@ -358,7 +392,6 @@ def main():
             dataset=dataset,
             start_date=start_date,
             end_date=end_date,
-            delete_tempfiles=args.delete,
             max_threads=args.workers,
             exclude_nodes=args.exclude_server,
             request_frequency=getattr(Frequency, args.output_group_by),
