@@ -43,6 +43,11 @@ class ERA5DatasetConfig(DatasetConfig):
         if cdi_map is not None:
             self._cdi_map.update(cdi_map)
 
+        for var_config in self.variables:
+            if var_config.prefix not in self._cdi_map:
+                raise RuntimeError("{} requested but we don't have a map to CDS API naming, "
+                                   "please select one of: {}".format(var_config.prefix, self._cdi_map))
+
     @property
     def cdi_map(self):
         return self._cdi_map
