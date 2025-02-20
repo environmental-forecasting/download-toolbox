@@ -229,7 +229,6 @@ class DatasetConfig(DataCollection):
 
     def save_data_for_config(self,
                              combine_method: str = "by_coords",
-                             config_path: os.PathLike = None,
                              rename_var_list: dict = None,
                              source_ds: object = None,
                              source_files: list = None,
@@ -261,7 +260,7 @@ class DatasetConfig(DataCollection):
             logging.warning("No data provided as data object or source files, not doing anything")
             if self._overwrite:
                 logging.warning("Overwriting configuration even without data thanks to dataset.overwrite flag")
-                self.save_config(config_path=config_path)
+                self.save_config()
             return
 
         # Strip out unnecessary / unwanted variables
@@ -314,7 +313,7 @@ class DatasetConfig(DataCollection):
                     dt_ds.close()
 
         # Write out the configuration file
-        self.save_config(config_path=config_path)
+        self.save_config()
 
     def var_config(self, var_name, level=None):
         """
@@ -366,16 +365,17 @@ class DatasetConfig(DataCollection):
 
         return output_filepaths
 
-    @property
-    def config(self):
-        if self._config is None:
-            config_ident = ".".join(self.path_components)
-
-            logging.debug("Creating dataset configuration with {}".format(config_ident))
-            self._config = Configuration(config_type=self._config_type,
-                                         directory=self.root_path,
-                                         identifier=config_ident)
-        return self._config
+    #@property
+    #def config(self):
+    #    if self._config is None:
+    #        config_ident = ".".join(self.path_components)
+    #
+    #        logging.debug("Creating dataset configuration with {}".format(config_ident))
+    #        self._config = Configuration(
+    #            config_path=self.config.output_path if self.config.output_path is None else self.root_path,
+    #            config_type=self.config_type,
+    #            identifier=config_ident)
+    #    return self._config
 
     @property
     def frequency(self):

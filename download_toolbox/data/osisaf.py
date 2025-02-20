@@ -345,7 +345,7 @@ def main():
         location=location,
         frequency=getattr(Frequency, args.frequency),
         output_group_by=getattr(Frequency, args.output_group_by),
-        config=args.config,
+        config_path=args.config,
         overwrite=args.overwrite_config,
     )
 
@@ -360,7 +360,6 @@ def main():
         )
         sic.download()
         dataset.save_data_for_config(
-            config_path=args.config,
             rename_var_list=dict(ice_conc="siconca"),
             source_files=sic.files_downloaded,
             var_filter_list=var_remove_list

@@ -33,7 +33,8 @@ __all__ = [
 ]
 
 
-def get_dataset_config_implementation(config: os.PathLike):
+def get_dataset_config_implementation(config: os.PathLike,
+                                      output_path: os.PathLike = None):
     if not str(config).endswith(".json"):
         raise RuntimeError("{} does not look like a JSON configuration".format(config))
     if not os.path.exists(config):
@@ -56,7 +57,10 @@ def get_dataset_config_implementation(config: os.PathLike):
                  for k, v in cfg.items()
                  if k not in [*["_{}".format(el) for el in freq_dict.keys()], "_location", "_config_type"]}
 
-    create_kwargs = dict(location=location, **remaining, **freq_dict)
+    create_kwargs = dict(config_path=output_path if output_path is not None else config,
+                         location=location,
+                         **remaining,
+                         **freq_dict)
     logging.info("Attempting to instantiate {} with loaded configuration".format(implementation))
     logging.debug("Converted kwargs from the retrieved configuration: {}".format(",".join(create_kwargs.keys())))
 

@@ -14,23 +14,23 @@ class ConfigurationError(RuntimeError):
 
 class Configuration(UserDict):
     def __init__(self,
-                 directory,
                  identifier,
-                 config_type,
+                 config_type: str = "config",
+                 config_path: os.PathLike = None,
                  **kwargs):
         super().__init__(kwargs)
 
-        self._directory = directory
         self._identifier = identifier
         self._history = []
+        self._path = config_path
         self._config_type = config_type
 
         self._load_existing()
 
     def _load_existing(self):
-        if os.path.exists(self.output_file):
-            logging.info("Loading configuration {}".format(self.output_file))
-            with open(self.output_file, "r") as fh:
+        if os.path.exists(self.output_path):
+            logging.info("Loading configuration {}".format(self.output_path))
+            with open(self.output_path, "r") as fh:
                 data = fh.read()
             obj = orjson.loads(data)
             self._history.extend(obj["history"])
@@ -38,13 +38,11 @@ class Configuration(UserDict):
 
     def render(self,
                owner,
-               config_path=None,
                implementation=None):
-        if config_path is not None:
-            output_path = os.path.abspath(config_path)
+        if self._path is not None:
+            output_path = os.path.abspath(self._path)
             if not os.path.isdir(os.path.dirname(output_path)):
-                raise ConfigurationError("Path {} should be path we can output to".format(config_path))
-            self.directory = os.path.dirname(output_path)
+                raise ConfigurationError("Path {} should be path we can output to".format(self._path))
 
         self._history.append(" ".join([
             "Run at {}: ".format(dt.datetime.now(dt.timezone.utc).strftime("%c %Z")),
@@ -58,32 +56,25 @@ class Configuration(UserDict):
             else ":".join([owner.__module__, owner.__class__.__name__]),
         }
 
-        output_path = self.output_file if config_path is None \
-            else os.path.join(config_path, os.path.split(self.output_file)[1]) if os.path.isdir(config_path) \
-            else config_path
-
-        logging.info("Writing configuration to {}".format(self.output_file))
+        logging.info("Writing configuration to {}".format(self.output_path))
         logging.debug(configuration)
 
         str_data = orjson.dumps(configuration, option=orjson.OPT_INDENT_2)
-        with open(output_path, "w") as fh:
+        with open(self.output_path, "w") as fh:
             fh.write(str_data.decode())
-        return output_path
-
-    @property
-    def directory(self):
-        return self._directory
-
-    @directory.setter
-    def directory(self, directory):
-        if not os.path.isdir(directory):
-            raise RuntimeError("Path {} is invalid, needs to be a directory".format(directory))
-        self._directory = directory
+        return self.output_path
 
     @property
     def identifier(self):
         return self._identifier
 
     @property
-    def output_file(self):
-        return os.path.join(self.directory, "{}.{}.json".format(self._config_type, self.identifier))
+    def output_path(self):
+        default_filename = "{}.{}.json".format(self._config_type, self.identifier)
+        return os.path.join(".", default_filename) if self._path is None else \
+            os.path.join(self._path, default_filename) if os.path.isdir(self._path) else \
+            self._path
+
+    @output_path.setter
+    def output_path(self, path: os.PathLike) -> None:
+        self._path = path

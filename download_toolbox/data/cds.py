@@ -264,7 +264,7 @@ def main():
         var_names=args.vars,
         frequency=getattr(Frequency, args.frequency),
         output_group_by=getattr(Frequency, args.output_group_by),
-        config=args.config,
+        config_path=args.config,
         overwrite=args.overwrite_config,
     )
 
@@ -280,7 +280,6 @@ def main():
         era5.download()
 
         dataset.save_data_for_config(
-            config_path=args.config,
             source_files=era5.files_downloaded,
             var_filter_list=["lambert_azimuthal_equal_area"],
         )
