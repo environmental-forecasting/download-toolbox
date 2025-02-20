@@ -370,7 +370,7 @@ def main():
     logging.info("CMIP6 Data Downloading")
 
     location = Location(
-        name="hemi.{}".format(args.hemisphere),
+        name=args.hemisphere,
         north=args.hemisphere == "north",
         south=args.hemisphere == "south",
     )
@@ -383,6 +383,7 @@ def main():
         var_names=args.vars,
         frequency=getattr(Frequency, args.frequency),
         output_group_by=getattr(Frequency, args.output_group_by),
+        config=args.config,
         overwrite=args.overwrite_config,
     )
 
@@ -400,5 +401,6 @@ def main():
         logging.info("CMIP downloading: {} {}".format(args.source, args.member))
         cmip6.download()
         dataset.save_data_for_config(
+            config_path=args.config,
             source_files=cmip6.files_downloaded,
         )

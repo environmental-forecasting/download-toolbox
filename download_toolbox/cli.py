@@ -120,6 +120,10 @@ class BaseArgParser(argparse.ArgumentParser):
         self._log_format = log_format
         self._suppress_logs = suppress_logs
 
+        self.add_argument("-c", "--config-path",
+                          dest="config",
+                          help="Path at which to output the configuration when rendered")
+
         self.add_argument("-v",
                           "--verbose",
                           action="store_true",
@@ -190,15 +194,15 @@ class DownloadArgParser(BaseArgParser):
         self._var_specs = True
 
         self.add_argument("vars",
-                        help="Comma separated list of vars",
-                        type=csv_arg,
-                        default=[])
+                          help="Comma separated list of vars",
+                          type=csv_arg,
+                          default=[])
         self.add_argument("levels",
-                        help="Comma separated list of pressures/depths as needed, "
-                             "use zero length string if None (e.g. ',,500,,,') and "
-                             "pipes for multiple per var (e.g. ',,250|500,,'",
-                        type=csv_of_csv_arg,
-                        default=[])
+                          help="Comma separated list of pressures/depths as needed, "
+                               "use zero length string if None (e.g. ',,500,,,') and "
+                               "pipes for multiple per var (e.g. ',,250|500,,'",
+                          type=csv_of_csv_arg,
+                          default=[])
         return self
 
     def add_workers(self):

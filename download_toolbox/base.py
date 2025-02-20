@@ -24,7 +24,7 @@ class DataCollection(metaclass=ABCMeta):
     def __init__(self,
                  *,
                  identifier: str,
-                 base_path: str = os.path.join(".", "data"),
+                 base_path: str = os.path.abspath(os.path.join(".", "data")),
                  config_type: str = "data_collection",
                  path_components: list = None,
                  **kwargs) -> None:
@@ -117,8 +117,9 @@ class DataCollection(metaclass=ABCMeta):
             else:
                 logging.info("Skipping creation for symlink: {}".format(self._path))
 
-    def save_config(self):
-        saved_config = self.config.render(self)
+    def save_config(self,
+                    config_path: os.PathLike = None):
+        saved_config = self.config.render(self, config_path=config_path)
         logging.info("Saved dataset config {}".format(saved_config))
         return saved_config
 

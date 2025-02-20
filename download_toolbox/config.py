@@ -38,12 +38,13 @@ class Configuration(UserDict):
 
     def render(self,
                owner,
-               directory=None,
+               config_path=None,
                implementation=None):
-        if directory is not None:
-            if not os.path.isdir(directory):
-                raise ConfigurationError("Path {} should be a directory".format(directory))
-            self.directory = directory
+        if config_path is not None:
+            output_path = os.path.abspath(config_path)
+            if not os.path.isdir(os.path.dirname(output_path)):
+                raise ConfigurationError("Path {} should be path we can output to".format(config_path))
+            self.directory = os.path.dirname(output_path)
 
         self._history.append(" ".join([
             "Run at {}: ".format(dt.datetime.now(dt.timezone.utc).strftime("%c %Z")),
@@ -57,13 +58,17 @@ class Configuration(UserDict):
             else ":".join([owner.__module__, owner.__class__.__name__]),
         }
 
+        output_path = self.output_file if config_path is None \
+            else os.path.join(config_path, os.path.split(self.output_file)[1]) if os.path.isdir(config_path) \
+            else config_path
+
         logging.info("Writing configuration to {}".format(self.output_file))
         logging.debug(configuration)
 
         str_data = orjson.dumps(configuration, option=orjson.OPT_INDENT_2)
-        with open(self.output_file, "w") as fh:
+        with open(output_path, "w") as fh:
             fh.write(str_data.decode())
-        return self.output_file
+        return output_path
 
     @property
     def directory(self):

@@ -114,7 +114,7 @@ def main():
 
     logging.info("AMSR-SIC Data Downloading")
     location = Location(
-        name="hemi.{}".format(args.hemisphere),
+        name=args.hemisphere,
         north=args.hemisphere == "north",
         south=args.hemisphere == "south",
     )
@@ -137,6 +137,7 @@ def main():
         sic.download()
         dataset.save_data_for_config(
             combine_method="nested",
+            config_path=args.config,
             # TODO: This should ideally be in IceNet? There is a bigger issue of naming to address (GH#10)
             rename_var_list=dict(z="siconca"),
             source_files=sic.files_downloaded,

@@ -130,12 +130,14 @@ class ERA5Downloader(ThreadedDownloader):
             retrieve_dict["pressure_level"] = [var_config.level]
         dataset = "reanalysis-era5-{}{}".format(level_id, "-monthly-means" if monthly_request else "")
 
-        _, date_end = get_era5_available_date_range(dataset)
+        # FIXME: this is quite shaky, not using at present
+        #    # _, date_end = get_era5_available_date_range(dataset)
 
-        # TODO: This updates to dates available for download, prevents
-        #       redundant downloads but, requires work to prevent
-        #       postprocess method from running if no downloaded file.
-        req_dates = [date for date in req_dates if date <= date_end]
+        #    # TODO: This updates to dates available for download, prevents
+        #    #       redundant downloads but, requires work to prevent
+        #    #       postprocess method from running if no downloaded file.
+        #    # req_dates = [date for date in req_dates if date <= date_end]
+        # END
 
         if not monthly_request:
             retrieve_dict["day"] = ["{:02d}".format(d) for d in range(1, 32)]
@@ -251,7 +253,7 @@ def main():
     logging.info("ERA5 Data Downloading")
 
     location = Location(
-        name="hemi.{}".format(args.hemisphere),
+        name=args.hemisphere,
         north=args.hemisphere == "north",
         south=args.hemisphere == "south",
     )
@@ -262,6 +264,7 @@ def main():
         var_names=args.vars,
         frequency=getattr(Frequency, args.frequency),
         output_group_by=getattr(Frequency, args.output_group_by),
+        config=args.config,
         overwrite=args.overwrite_config,
     )
 
@@ -277,6 +280,7 @@ def main():
         era5.download()
 
         dataset.save_data_for_config(
+            config_path=args.config,
             source_files=era5.files_downloaded,
             var_filter_list=["lambert_azimuthal_equal_area"],
         )

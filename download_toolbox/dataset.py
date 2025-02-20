@@ -155,8 +155,7 @@ class DatasetConfig(DataCollection):
             extant_ds = xr.open_mfdataset(extant_paths)
             # This is blunt initialisation, as we're completely refreshing from source
             self._existing_dates = [pd.to_datetime(d).date()
-                                    for d in extant_ds.time.values
-                                    if pd.to_datetime(d).date() not in self._existing_dates]
+                                    for d in extant_ds.time.values]
 
             dt_arr = sorted(list(set(dt_arr).difference(self._existing_dates)))
             dt_arr.reverse()
@@ -180,7 +179,11 @@ class DatasetConfig(DataCollection):
             for var_name in x.keys():
                 if var_name not in data:
                     data[var_name] = list()
-                data[var_name].extend(x[var_name])
+
+                if isinstance(x[var_name], str):
+                    data[var_name].append(x[var_name])
+                else:
+                    data[var_name].extend(x[var_name])
             return {k: list(sorted(set(files))) for k, files in data.items()}
 
         my_funcs = dict(
@@ -226,6 +229,7 @@ class DatasetConfig(DataCollection):
 
     def save_data_for_config(self,
                              combine_method: str = "by_coords",
+                             config_path: os.PathLike = None,
                              rename_var_list: dict = None,
                              source_ds: object = None,
                              source_files: list = None,
@@ -257,7 +261,7 @@ class DatasetConfig(DataCollection):
             logging.warning("No data provided as data object or source files, not doing anything")
             if self._overwrite:
                 logging.warning("Overwriting configuration even without data thanks to dataset.overwrite flag")
-                self.save_config()
+                self.save_config(config_path=config_path)
             return
 
         # Strip out unnecessary / unwanted variables
@@ -310,7 +314,7 @@ class DatasetConfig(DataCollection):
                     dt_ds.close()
 
         # Write out the configuration file
-        self.save_config()
+        self.save_config(config_path=config_path)
 
     def var_config(self, var_name, level=None):
         """
