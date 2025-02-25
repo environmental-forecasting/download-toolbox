@@ -24,7 +24,8 @@ class DataCollection(metaclass=ABCMeta):
     def __init__(self,
                  *,
                  identifier: str,
-                 base_path: str = os.path.join(".", "data"),
+                 base_path: str = os.path.abspath(os.path.join(".", "data")),
+                 config_path: os.PathLike = None,
                  config_type: str = "data_collection",
                  path_components: list = None,
                  **kwargs) -> None:
@@ -40,6 +41,7 @@ class DataCollection(metaclass=ABCMeta):
         self._root_path = None
         self._path = None
         self._config = None
+        self._config_path = config_path
         self._config_type = config_type
 
         self.init()
@@ -98,7 +100,7 @@ class DataCollection(metaclass=ABCMeta):
         """
         strip_keys = [] if strip_keys is None else strip_keys
         return {k: config_funcs[k](v) if config_funcs is not None and k in config_funcs else v
-                for k, v in self.__dict__.items() if k not in ["_path", "_config", "_root_path"] + strip_keys}
+                for k, v in self.__dict__.items() if k not in ["_path", "_config", "_config_path", "_root_path"] + strip_keys}
 
     def init(self):
         self._config = None
@@ -129,14 +131,20 @@ class DataCollection(metaclass=ABCMeta):
     @property
     def config(self):
         if self._config is None:
-            self._config = Configuration(directory=self.root_path,
-                                         config_type=self._config_type,
-                                         identifier=self.identifier)
+            self._config = Configuration(
+                config_path=self._config_path if self._config_path is not None else self._root_path,
+                config_type=self._config_type,
+                identifier=self.identifier)
         return self._config
 
     @property
-    def config_file(self):
-        return self.config.output_file
+    def config_path(self):
+        return self.config.output_path
+
+    @config_path.setter
+    def config_path(self, config_path: os.PathLike) -> None:
+        self._config_path = config_path
+        self._config.output_path = config_path
 
     @property
     def config_type(self):

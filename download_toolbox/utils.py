@@ -57,31 +57,6 @@ def run_command(command: str, dry: bool = False):
     return ret
 
 
-def setup_logging(func,
-                  log_format="[%(asctime)-17s :%(levelname)-8s] - %(message)s"):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        parsed_args = func(*args, **kwargs)
-        level = logging.INFO
-
-        if hasattr(parsed_args, "verbose") and parsed_args.verbose:
-            level = logging.DEBUG
-
-        logging.basicConfig(
-            level=level,
-            format=log_format,
-            datefmt="%d-%m-%y %T",
-        )
-        # FIXME: something is interrupting the root logger setup
-        logging.getLogger().setLevel(level)
-        # TODO: better way of handling these on a case by case basis
-        logging.getLogger("cdsapi").setLevel(logging.WARNING)
-        logging.getLogger("requests").setLevel(logging.WARNING)
-        logging.getLogger("urllib3").setLevel(logging.WARNING)
-        return parsed_args
-    return wrapper
-
-
 # This is adapted from the data/loaders implementations
 class DaskWrapper:
     """
@@ -96,12 +71,15 @@ class DaskWrapper:
                  dask_port: int = 8888,
                  dask_timeouts: int = 60,
                  dask_tmp_dir: object = "/tmp",
-                 workers: int = 8):
+                 workers: int = 8,
+                 scheduler: str = "single-threaded",
+                 ):
 
         self._dashboard_port = dask_port
         self._timeout = dask_timeouts
         self._tmp_dir = dask_tmp_dir
         self._workers = workers
+        self._scheduler = scheduler
 
     def dask_process(self,
                      *args,
@@ -117,7 +95,9 @@ class DaskWrapper:
             "temporary_directory": self._tmp_dir,
             "distributed.comm.timeouts.connect": self._timeout,
             "distributed.comm.timeouts.tcp": self._timeout,
-        }):
+            # "scheduler": self._scheduler, # Fix to "single-threaded" for netCDF4 >=1.6.1 not thread-safe.
+        }
+        ):
             cluster = LocalCluster(
                 dashboard_address=dashboard,
                 n_workers=self._workers,
@@ -205,7 +185,7 @@ class HTTPClient(object):
             with open(destination_path, "wb") as fh:
                 fh.write(response.content)
         else:
-            raise ClientError("HTTP response was not successful, writing nothing: {}".format(response.status_code))
+            raise ClientError("HTTP response from {} not successful, writing nothing: {}".format(source_url, response.status_code))
 
 
 class ClientError(RuntimeError):

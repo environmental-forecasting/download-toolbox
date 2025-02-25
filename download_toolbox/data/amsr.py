@@ -4,9 +4,9 @@ import os
 import datetime as dt
 
 from download_toolbox.dataset import DatasetConfig, DataSetError
-from download_toolbox.cli import download_args
+from download_toolbox.cli import DownloadArgParser
 from download_toolbox.download import ThreadedDownloader, DownloaderError
-from download_toolbox.utils import HTTPClient
+from download_toolbox.utils import HTTPClient, ClientError
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
 
@@ -94,7 +94,7 @@ class AMSRDownloader(ThreadedDownloader):
                     logging.info("Downloading {}".format(destination_path))
                     self._http_client.single_request(file_in_question, destination_path)
                     files_downloaded.append(destination_path)
-                except DownloaderError as e:
+                except (ClientError, DownloaderError) as e:
                     logging.warning("Failed to download {}: {}".format(destination_path, e))
                     self.missing_dates.append(file_date)
             else:
@@ -105,18 +105,16 @@ class AMSRDownloader(ThreadedDownloader):
 
 
 def main():
-    args = download_args(var_specs=False,
-                         workers=True,
-                         extra_args=[
-                             (["-r", "--resolution"], dict(
-                                 type=float,
-                                 choices=[3.125, 6.25],
-                                 default=6.25
-                             ))])
+    args = DownloadArgParser().add_workers().add_extra_args([
+        (["-r", "--resolution"], dict(
+            type=float,
+            choices=[3.125, 6.25],
+            default=6.25
+        ))]).parse_args()
 
     logging.info("AMSR-SIC Data Downloading")
     location = Location(
-        name="hemi.{}".format(args.hemisphere),
+        name=args.hemisphere,
         north=args.hemisphere == "north",
         south=args.hemisphere == "south",
     )
@@ -125,6 +123,7 @@ def main():
         location=location,
         frequency=getattr(Frequency, args.frequency),
         output_group_by=getattr(Frequency, args.output_group_by),
+        config_path=args.config,
         overwrite=args.overwrite_config,
     )
 
