@@ -180,7 +180,7 @@ class HTTPClient(object):
             with open(destination_path, "wb") as fh:
                 fh.write(response.content)
         else:
-            raise ClientError("HTTP response was not successful, writing nothing: {}".format(response.status_code))
+            raise ClientError("HTTP response from {} not successful, writing nothing: {}".format(source_url, response.status_code))
 
 
 class ClientError(RuntimeError):
