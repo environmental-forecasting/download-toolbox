@@ -215,7 +215,9 @@ class DatasetConfig(DataCollection):
         logging.debug(pformat(var_files))
 
         # TODO: where's my parallel mfdataset please!?
-        with dask.config.set(**{'array.slicing.split_large_chunks': True}):
+        with dask.config.set(**{'array.slicing.split_large_chunks': True,
+                                # "scheduler": self._scheduler, # Fix to "single-threaded" for netCDF4 >=1.6.1 not thread-safe.
+                                }):
             ds = xr.open_mfdataset(
                 var_files,
                 combine="nested",
@@ -246,7 +248,10 @@ class DatasetConfig(DataCollection):
                 logging.debug("Opening source files: {}".format(pformat(source_files)))
                 ds = xr.open_mfdataset(source_files,
                                        combine=combine_method,
-                                       concat_dim=None if combine_method == "by_coords" else "time")
+                                       concat_dim=None if combine_method == "by_coords" else "time",
+                                       parallel=True,
+                                       engine="h5netcdf",
+                                       )
             except ValueError as e:
                 logging.exception("Could not open files {} with error".format(source_files))
                 raise DataSetError(e)
