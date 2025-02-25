@@ -6,7 +6,7 @@ import datetime as dt
 from download_toolbox.dataset import DatasetConfig, DataSetError
 from download_toolbox.cli import DownloadArgParser
 from download_toolbox.download import ThreadedDownloader, DownloaderError
-from download_toolbox.utils import HTTPClient
+from download_toolbox.utils import HTTPClient, ClientError
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
 
@@ -94,7 +94,7 @@ class AMSRDownloader(ThreadedDownloader):
                     logging.info("Downloading {}".format(destination_path))
                     self._http_client.single_request(file_in_question, destination_path)
                     files_downloaded.append(destination_path)
-                except DownloaderError as e:
+                except (ClientError, DownloaderError) as e:
                     logging.warning("Failed to download {}: {}".format(destination_path, e))
                     self.missing_dates.append(file_date)
             else:
