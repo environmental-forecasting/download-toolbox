@@ -29,6 +29,8 @@ class ERA5DatasetConfig(DatasetConfig):
         'rsds': 'surface_solar_radiation_downwards',
         'uas': '10m_u_component_of_wind',
         'vas': '10m_v_component_of_wind',
+        'ua': 'u_component_of_wind',
+        'va': 'v_component_of_wind',
     }
 
     def __init__(self,
