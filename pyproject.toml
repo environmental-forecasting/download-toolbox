@@ -53,7 +53,7 @@ download_osisaf = "download_toolbox.data.osisaf:main"
 download_amsr2 = "download_toolbox.data.amsr:main"
 
 [tool.setuptools]
-py-modules = ["download_toolbox"]
+py-modules = ["download_toolbox", "download_toolbox.data"]
 
 [tool.setuptools.dynamic]
 version = {attr = "download_toolbox.__version__"}
