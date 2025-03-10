@@ -43,6 +43,7 @@ class DatasetConfig(DataCollection):
 
     def __init__(self,
                  *,
+                 existing_dates: list = None,
                  frequency: object = Frequency.DAY,
                  levels: object = (),
                  location: object,
@@ -59,6 +60,7 @@ class DatasetConfig(DataCollection):
                                             if path_components is None else path_components,
                                             **kwargs)
 
+        self._existing_dates = list() if existing_dates is None else existing_dates
         self._frequency = frequency
         self._levels = list(levels)
         self._location = location
@@ -151,9 +153,11 @@ class DatasetConfig(DataCollection):
 
         if len(extant_paths) > 0:
             extant_ds = xr.open_mfdataset(extant_paths)
-            exclude_dates = [pd.to_datetime(d).date() for d in extant_ds.time.values]
+            # This is blunt initialisation, as we're completely refreshing from source
+            self._existing_dates = [pd.to_datetime(d).date()
+                                    for d in extant_ds.time.values]
 
-            dt_arr = sorted(list(set(dt_arr).difference(exclude_dates)))
+            dt_arr = sorted(list(set(dt_arr).difference(self._existing_dates)))
             dt_arr.reverse()
 
             # We won't hold onto an active dataset during network I/O
@@ -175,7 +179,11 @@ class DatasetConfig(DataCollection):
             for var_name in x.keys():
                 if var_name not in data:
                     data[var_name] = list()
-                data[var_name].extend(x[var_name])
+
+                if isinstance(x[var_name], str):
+                    data[var_name].append(x[var_name])
+                else:
+                    data[var_name].extend(x[var_name])
             return {k: list(sorted(set(files))) for k, files in data.items()}
 
         my_funcs = dict(
@@ -249,8 +257,10 @@ class DatasetConfig(DataCollection):
                 raise DataSetError(e)
 
             if time_dim_values is not None:
-                logging.warning("Assigning time dimension with {} values".format(len(time_dim_values)))
-                ds = ds.assign(dict(time=[pd.Timestamp(d) for d in time_dim_values]))
+                time_dt_arr = [pd.Timestamp(d) for d in time_dim_values if d not in self._existing_dates]
+                logging.warning("Assigning time dimension with {} values".format(len(time_dt_arr)))
+                ds = ds.assign(dict(time=time_dt_arr))
+                self._existing_dates.append([pd.to_datetime(d).date() for d in time_dt_arr])
         else:
             logging.warning("No data provided as data object or source files, not doing anything")
             if self._overwrite:
@@ -273,7 +283,7 @@ class DatasetConfig(DataCollection):
         # Rename if requested
         if rename_var_list:
             logging.info("Renaming {} variables if available".format(rename_var_list))
-            ds = ds.rename_vars({k: v for k, v in rename_var_list.items() if k in ds.data_vars})
+            ds = ds.rename({k: v for k, v in rename_var_list.items() if k in list(ds.coords) + list(ds.data_vars)})
 
         # For all variables in ds, determine if there are destinations available
         for var_config in [vc for vc in self.variables if vc.name in ds.data_vars]:
@@ -293,6 +303,7 @@ class DatasetConfig(DataCollection):
 
                 # If exists, merge and concatenate the data to destination (overwrite?) at output_group_by
                 if os.path.exists(destination_path):
+                    logging.debug("Outputting new data to temporary file as {} already exists".format(destination_path))
                     fh, temporary_name = tempfile.mkstemp(dir=".")
                     os.close(fh)
                     dt_ds.to_netcdf(temporary_name)
@@ -359,16 +370,17 @@ class DatasetConfig(DataCollection):
 
         return output_filepaths
 
-    @property
-    def config(self):
-        if self._config is None:
-            config_ident = ".".join(self.path_components)
-
-            logging.debug("Creating dataset configuration with {}".format(config_ident))
-            self._config = Configuration(config_type=self._config_type,
-                                         directory=self.root_path,
-                                         identifier=config_ident)
-        return self._config
+    #@property
+    #def config(self):
+    #    if self._config is None:
+    #        config_ident = ".".join(self.path_components)
+    #
+    #        logging.debug("Creating dataset configuration with {}".format(config_ident))
+    #        self._config = Configuration(
+    #            config_path=self.config.output_path if self.config.output_path is None else self.root_path,
+    #            config_type=self.config_type,
+    #            identifier=config_ident)
+    #    return self._config
 
     @property
     def frequency(self):

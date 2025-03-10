@@ -9,8 +9,10 @@ import cdsapi as cds
 import pandas as pd
 import xarray as xr
 
+from pprint import pformat
+
 from download_toolbox.dataset import DatasetConfig
-from download_toolbox.cli import download_args
+from download_toolbox.cli import DownloadArgParser
 from download_toolbox.download import ThreadedDownloader, DownloaderError
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
@@ -45,6 +47,11 @@ class ERA5DatasetConfig(DatasetConfig):
         self._cdi_map = ERA5DatasetConfig.CDI_MAP
         if cdi_map is not None:
             self._cdi_map.update(cdi_map)
+
+        for var_config in self.variables:
+            if var_config.prefix not in self._cdi_map:
+                raise RuntimeError("{} requested but we don't have a map to CDS API naming, "
+                                   "please select one of: {}".format(var_config.prefix, self._cdi_map))
 
     @property
     def cdi_map(self):
@@ -108,17 +115,18 @@ class ERA5Downloader(ThreadedDownloader):
         os.makedirs(os.path.dirname(download_path), exist_ok=True)
 
         retrieve_dict = {
-            "product_type": product_type,
+            "product_type": [product_type,],
             "variable": self.dataset.cdi_map[var_config.prefix],
-            "year": int(req_dates[0].year),
+            "year": [int(req_dates[0].year),],
             "month": list(set(["{:02d}".format(rd.month)
                                for rd in sorted(req_dates)])),
             # TODO: assumption about the time of day!
-            "time": "12:00",
+            "time": ["12:00",],
             "format": "netcdf",
             # TODO: explicit, but should be implicit
             "grid": [0.25, 0.25],
             "area": self.dataset.location.bounds,
+            "download_format": "unarchived"
         }
 
         level_id = "single-levels"
@@ -127,12 +135,14 @@ class ERA5Downloader(ThreadedDownloader):
             retrieve_dict["pressure_level"] = [var_config.level]
         dataset = "reanalysis-era5-{}{}".format(level_id, "-monthly-means" if monthly_request else "")
 
-        _, date_end = get_era5_available_date_range(dataset)
+        # FIXME: this is quite shaky, not using at present
+        #    # _, date_end = get_era5_available_date_range(dataset)
 
-        # TODO: This updates to dates available for download, prevents
-        #       redundant downloads but, requires work to prevent
-        #       postprocess method from running if no downloaded file.
-        req_dates = [date for date in req_dates if date <= date_end.date()]
+        #    # TODO: This updates to dates available for download, prevents
+        #    #       redundant downloads but, requires work to prevent
+        #    #       postprocess method from running if no downloaded file.
+        #    # req_dates = [date for date in req_dates if date <= date_end]
+        # END
 
         if not monthly_request:
             retrieve_dict["day"] = ["{:02d}".format(d) for d in range(1, 32)]
@@ -144,7 +154,7 @@ class ERA5Downloader(ThreadedDownloader):
 
         try:
             logging.info("Downloading data for {}...".format(var_config.name))
-
+            logging.debug("Request dataset {} with:\n".format(pformat(retrieve_dict)))
             self.client.retrieve(
                 dataset,
                 retrieve_dict,
@@ -159,11 +169,11 @@ class ERA5Downloader(ThreadedDownloader):
 
         ds = xr.open_dataset(temp_download_path)
 
+        # TODO: there is duplicated / messy code here from CDS API alterations, clean it up
         # New CDSAPI file holds more data_vars than just variable.
         # Omit them when figuring out default CDS variable name.
         omit_vars = {"number", "expver", "time", "date", "valid_time", "latitude", "longitude"}
         data_vars = set(ds.data_vars)
-
         var_list = list(data_vars.difference(omit_vars))
         if not var_list:
             raise ValueError(f"No variables found in file")
@@ -190,6 +200,7 @@ class ERA5Downloader(ThreadedDownloader):
         # files rather than storing them all in separate dimension of one array/file.
         if "pressure_level" in da.dims:
             da = da.squeeze(dim="pressure_level").drop_vars("pressure_level")
+
         if "number" in da.coords:
             da = da.drop_vars("number")
 
@@ -212,7 +223,7 @@ class ERA5Downloader(ThreadedDownloader):
                             "storing for later overwriting")
             # Ref: https://confluence.ecmwf.int/pages/viewpage.action?pageId=173385064
             # da = da.sel(expver=1).combine_first(da.sel(expver=5))
-
+        logging.info("Saving corrected ERA5 file to {}".format(download_path))
         da.to_netcdf(download_path)
         da.close()
 
@@ -249,12 +260,12 @@ def get_era5_available_date_range(dataset: str = "reanalysis-era5-single-levels"
 
 
 def main():
-    args = download_args(workers=True)
+    args = DownloadArgParser().add_var_specs().add_workers().parse_args()
 
     logging.info("ERA5 Data Downloading")
 
     location = Location(
-        name="hemi.{}".format(args.hemisphere),
+        name=args.hemisphere,
         north=args.hemisphere == "north",
         south=args.hemisphere == "south",
     )
@@ -265,6 +276,7 @@ def main():
         var_names=args.vars,
         frequency=getattr(Frequency, args.frequency),
         output_group_by=getattr(Frequency, args.output_group_by),
+        config_path=args.config,
         overwrite=args.overwrite_config,
     )
 

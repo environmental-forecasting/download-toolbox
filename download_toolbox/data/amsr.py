@@ -4,9 +4,9 @@ import os
 import datetime as dt
 
 from download_toolbox.dataset import DatasetConfig, DataSetError
-from download_toolbox.cli import download_args
+from download_toolbox.cli import DownloadArgParser
 from download_toolbox.download import ThreadedDownloader, DownloaderError
-from download_toolbox.utils import HTTPClient
+from download_toolbox.utils import HTTPClient, ClientError
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
 
@@ -30,6 +30,7 @@ class AMSRDatasetConfig(DatasetConfig):
 
         super().__init__(identifier="amsr2_{:1.3f}".format(resolution).replace(".", "")
                          if identifier is None else identifier,
+                         # TODO: see below, GH#10 on consistency of naming in datasets, this should be in IceNet
                          var_names=["siconca"] if var_names is None else var_names,
                          levels=[None] if levels is None else levels,
                          **kwargs)
@@ -93,7 +94,7 @@ class AMSRDownloader(ThreadedDownloader):
                     logging.info("Downloading {}".format(destination_path))
                     self._http_client.single_request(file_in_question, destination_path)
                     files_downloaded.append(destination_path)
-                except DownloaderError as e:
+                except (ClientError, DownloaderError) as e:
                     logging.warning("Failed to download {}: {}".format(destination_path, e))
                     self.missing_dates.append(file_date)
             else:
@@ -104,18 +105,16 @@ class AMSRDownloader(ThreadedDownloader):
 
 
 def main():
-    args = download_args(var_specs=False,
-                         workers=True,
-                         extra_args=[
-                             (["-r", "--resolution"], dict(
-                                 type=float,
-                                 choices=[3.125, 6.25],
-                                 default=6.25
-                             ))])
+    args = DownloadArgParser().add_workers().add_extra_args([
+        (["-r", "--resolution"], dict(
+            type=float,
+            choices=[3.125, 6.25],
+            default=6.25
+        ))]).parse_args()
 
     logging.info("AMSR-SIC Data Downloading")
     location = Location(
-        name="hemi.{}".format(args.hemisphere),
+        name=args.hemisphere,
         north=args.hemisphere == "north",
         south=args.hemisphere == "south",
     )
@@ -124,6 +123,7 @@ def main():
         location=location,
         frequency=getattr(Frequency, args.frequency),
         output_group_by=getattr(Frequency, args.output_group_by),
+        config_path=args.config,
         overwrite=args.overwrite_config,
     )
 
@@ -138,6 +138,7 @@ def main():
         sic.download()
         dataset.save_data_for_config(
             combine_method="nested",
+            # TODO: This should ideally be in IceNet? There is a bigger issue of naming to address (GH#10)
             rename_var_list=dict(z="siconca"),
             source_files=sic.files_downloaded,
             time_dim_values=[date for date in sic.dates if date not in sic.missing_dates],

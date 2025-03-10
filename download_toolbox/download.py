@@ -50,6 +50,7 @@ class Downloader(metaclass=abc.ABCMeta):
         self._download = download
         self._drop_vars = list() if drop_vars is None else drop_vars
         self._files_downloaded = []
+        # TODO: can and should (?) be populated as part of download - threaded==future-arg map
         self._missing_dates = []
         self._postprocess = postprocess
         self._request_frequency = source_min_frequency \
@@ -134,11 +135,13 @@ class Downloader(metaclass=abc.ABCMeta):
     def request_frequency(self) -> Frequency:
         return self._request_frequency
 
+    @property
+    def skipped_dates(self) -> set:
+        return self._skipped_dates
+
 
 class ThreadedDownloader(Downloader, metaclass=ABCMeta):
     """Data downloader base class for batching downloading
-
-
 
     :param dates:
     :param delete_tempfiles:
