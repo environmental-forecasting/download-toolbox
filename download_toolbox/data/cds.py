@@ -21,7 +21,7 @@ class ERA5DatasetConfig(DatasetConfig):
         'tas': '2m_temperature',
         'ta': 'temperature',  # 500
         'tos': 'sea_surface_temperature',
-        'psl': 'surface_pressure',
+        'ps': 'surface_pressure',
         'zg': 'geopotential',  # 250 and 500
         'hus': 'specific_humidity',  # 1000
         'rlds': 'surface_thermal_radiation_downwards',
@@ -31,6 +31,7 @@ class ERA5DatasetConfig(DatasetConfig):
         'ua': 'u_component_of_wind',
         'va': 'v_component_of_wind',
         'sic': 'sea_ice_cover',
+        'psl': 'mean_sea_level_pressure',
     }
 
     def __init__(self,
