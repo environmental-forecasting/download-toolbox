@@ -30,6 +30,7 @@ class ERA5DatasetConfig(DatasetConfig):
         'vas': '10m_v_component_of_wind',
         'ua': 'u_component_of_wind',
         'va': 'v_component_of_wind',
+        'sic': 'sea_ice_cover',
     }
 
     def __init__(self,
