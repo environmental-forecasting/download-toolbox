@@ -2,6 +2,8 @@ import logging
 import os
 import requests
 
+from functools import lru_cache
+
 import datetime as dt
 import xarray as xr
 
@@ -172,6 +174,7 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
                          # TODO: validate ESGF frequencies other than MONTH / YEAR
                          source_min_frequency=Frequency.YEAR,
                          source_max_frequency=Frequency.HOUR,
+                         # TODO: request_frequency is a problem, we need to batch as big as possible, or cache results!!!
                          **kwargs)
         exclude_nodes = list() if exclude_nodes is None else exclude_nodes
 
@@ -206,7 +209,6 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
         }
 
         results = []
-        # self._connection = SearchConnection(self._search_node, distrib=True)
 
         logging.info("Querying ESGF for experiment {} for {}".format(" and ".join(self.dataset.experiments), var_config.name))
         query['experiment_id'] = ",".join(self.dataset.experiments)
@@ -283,6 +285,7 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
                 return [download_path]
             return [None]
 
+    @lru_cache(1000)
     def esgf_search(self,
                     files_type: str = "OPENDAP",
                     local_node: bool = False,
