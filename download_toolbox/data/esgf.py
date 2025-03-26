@@ -149,6 +149,7 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
     # against nodes further afield (all traffic has a cost, and the coverage
     # of local nodes is more than enough)
     ESGF_NODES = (
+        "esgf-data1.llnl.gov",
         "esgf.ceda.ac.uk",
         #"esg1.umr-cnrm.fr",
         #"vesg.ipsl.upmc.fr",
@@ -207,31 +208,30 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
         results = []
         # self._connection = SearchConnection(self._search_node, distrib=True)
 
-        for experiment_id in self.dataset.experiments:
-            logging.info("Querying ESGF for experiment {} for {}".format(experiment_id, var_config.name))
-            query['experiment_id'] = experiment_id
-            for data_node in self._nodes:
-                query['data_node'] = data_node
-                node_results = self.esgf_search(**query)
+        logging.info("Querying ESGF for experiment {} for {}".format(" and ".join(self.dataset.experiments), var_config.name))
+        query['experiment_id'] = ",".join(self.dataset.experiments)
+        for data_node in self._nodes:
+            query['data_node'] = data_node
+            node_results = self.esgf_search(**query)
 
-                if node_results is not None and len(node_results) > 0:
-                    logging.debug("Query: {}".format(query))
-                    logging.debug("Found {}: {}".format(experiment_id, node_results))
-                    results.extend(node_results)
-                    break
+            if node_results is not None and len(node_results) > 0:
+                logging.debug("Query: {}".format(query))
+                logging.debug("Found {}-{}: {} results".format(",".join(self.dataset.experiments), var_config.name, len(node_results)))
+                results.extend(node_results)
+                break
 
         start_date, end_date = req_dates[0], req_dates[-1]
         date_proc = lambda s: dt.datetime(int(s[0:4]), int(s[4:6]), 1).date() \
             if self.dataset.frequency <= Frequency.MONTH else dt.datetime(int(s[0:4]), int(s[4:6]), int(s[6:8])).date()
-        file_dates = list(zip(results, *[(date_proc(start), date_proc(end)) for start, end in
-                                         [df.split("_")[-1].rstrip(".nc").split("-") for df in results]]))
+        valid_urls = []
+        for idx, df in enumerate(results):
+            start, end = [date_proc(date_str) for date_str in df.split("_")[-1].rstrip(".nc").split("-")]
+            if start_date <= start <= end <= end_date \
+                or start_date <= start <= end_date \
+                    or start_date <= end <= end_date:
+                valid_urls.append(df)
 
-        results = [x[0] for x in file_dates
-                   if start_date <= x[1] <= end_date
-                   or start_date <= x[2] <= end_date
-                   or (x[1] < start_date < end_date < x[2])]
-
-        if len(results) == 0:
+        if len(valid_urls) == 0:
             # TODO: what really happens when we have this?
             logging.warning("NO RESULTS FOUND for {} from ESGF search {}".format(var_config.name,
                                                                                  ",".join(query.values())))
@@ -242,12 +242,12 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
                                          self.dataset.location.name,
                                          os.path.basename(self.dataset.var_filepath(var_config, req_dates)))
 
-            logging.debug("\n".join(results))
+            logging.debug("\n".join(valid_urls))
 
             try:
                 # http://xarray.pydata.org/en/stable/user-guide/io.html?highlight=opendap#opendap
                 # Avoid 500MB DAP request limit
-                cmip6_ds = xr.open_mfdataset(results,
+                cmip6_ds = xr.open_mfdataset(valid_urls,
                                              combine='by_coords',
                                              chunks={'time': '499MB'})
 
@@ -330,6 +330,7 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
         numFound = 10000
         all_files = []
         files_type = files_type.upper()
+        payload["limit"] = 1000
         while offset < numFound:
             payload["offset"] = offset
             url_keys = []
@@ -346,13 +347,14 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
             resp = resp["docs"]
             offset += len(resp)
             for d in resp:
-                for k in d:
-                    logging.debug("{}: {}".format(k, d[k]))
+                # for k in d:
+                #    logging.debug("{}: {}".format(k, d[k]))
 
                 for f in d["url"]:
                     sp = f.split("|")
                     if sp[-1] == files_type:
                         all_files.append(sp[0].split(".html")[0])
+
         return sorted(all_files)
 
 
