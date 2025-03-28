@@ -1,6 +1,7 @@
 import logging
 import os
 import requests
+import urllib
 
 from functools import lru_cache
 
@@ -150,20 +151,6 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
     # Prioritise European first, US last, avoiding unnecessary queries
     # against nodes further afield (all traffic has a cost, and the coverage
     # of local nodes is more than enough)
-    ESGF_NODES = (
-        "esgf-data1.llnl.gov",
-        "esgf.ceda.ac.uk",
-        #"esg1.umr-cnrm.fr",
-        #"vesg.ipsl.upmc.fr",
-        #"esgf3.dkrz.de",
-        "esgf.bsc.es",
-        #"esgf-data.csc.fi",
-        #"noresg.nird.sigma2.no",
-        #"esgf-data.ucar.edu",
-        #"aims3.llnl.gov",
-        "esgf-data2.diasjp.net",
-    )
-
     def __init__(self,
                  *args,
                  nodes: object = None,
@@ -174,14 +161,14 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
                          # TODO: validate ESGF frequencies other than MONTH / YEAR
                          source_min_frequency=Frequency.YEAR,
                          source_max_frequency=Frequency.HOUR,
-                         # TODO: request_frequency is a problem, we need to batch as big as possible, or cache results!!!
+                         # TODO: request_frequency is a problem, we should batch
+                         #  as big as possible, but currently only cache queries
                          **kwargs)
         exclude_nodes = list() if exclude_nodes is None else exclude_nodes
 
         self._search_node = search_node
         # self.__connection = None
-        self._nodes = nodes if nodes is not None else \
-            [n for n in CMIP6LegacyDownloader.ESGF_NODES if n not in exclude_nodes]
+        self._exclude_nodes = exclude_nodes if exclude_nodes is not None else []
 
     def _single_download(self,
                          var_config: object,
@@ -212,78 +199,102 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
 
         logging.info("Querying ESGF for experiment {} for {}".format(" and ".join(self.dataset.experiments), var_config.name))
         query['experiment_id'] = ",".join(self.dataset.experiments)
-        for data_node in self._nodes:
-            query['data_node'] = data_node
-            node_results = self.esgf_search(**query)
 
-            if node_results is not None and len(node_results) > 0:
-                logging.debug("Query: {}".format(query))
-                logging.debug("Found {}-{}: {} results".format(",".join(self.dataset.experiments), var_config.name, len(node_results)))
-                results.extend(node_results)
-                break
+        node_results = self.esgf_search(**query)
 
-        start_date, end_date = req_dates[0], req_dates[-1]
-        date_proc = lambda s: dt.datetime(int(s[0:4]), int(s[4:6]), 1).date() \
-            if self.dataset.frequency <= Frequency.MONTH else dt.datetime(int(s[0:4]), int(s[4:6]), int(s[6:8])).date()
-        valid_urls = []
-        for idx, df in enumerate(results):
-            start, end = [date_proc(date_str) for date_str in df.split("_")[-1].rstrip(".nc").split("-")]
-            if start_date <= start <= end <= end_date \
-                or start_date <= start <= end_date \
-                    or start_date <= end <= end_date:
-                valid_urls.append(df)
+        if node_results is not None and len(node_results) > 0:
+            logging.debug("Query: {}".format(query))
+            logging.debug("Found {}-{}: {} results".format(
+                ",".join(self.dataset.experiments), var_config.name, len(node_results)))
 
-        if len(valid_urls) == 0:
-            # TODO: what really happens when we have this?
-            logging.warning("NO RESULTS FOUND for {} from ESGF search {}".format(var_config.name,
-                                                                                 ",".join(query.values())))
-            return None
+            start_date, end_date = req_dates[0], req_dates[-1]
+            date_proc = lambda s: dt.datetime(int(s[0:4]), int(s[4:6]), 1).date() \
+                if self.dataset.frequency <= Frequency.MONTH else dt.datetime(int(s[0:4]), int(s[4:6]),
+                                                                              int(s[6:8])).date()
+            for idx, df in enumerate(node_results):
+                start, end = [date_proc(date_str) for date_str in df.split("_")[-1].rstrip(".nc").split("-")]
+                if start <= start_date < end_date <= end \
+                        or start <= start_date <= end \
+                        or start <= end_date <= end:
+                    results.append(df)
         else:
-            cmip6_da = None
-            download_path = os.path.join(var_config.root_path,
-                                         self.dataset.location.name,
-                                         os.path.basename(self.dataset.var_filepath(var_config, req_dates)))
+            logging.warning("No unbounded results for {} from ESGF search {}".format(
+                var_config.name, ",".join(query.values())))
+            return None
 
-            logging.debug("\n".join(valid_urls))
+        # Filter by excluded domains and group together the rest for testing
+        node_grouped_results = dict()
+        for result in results:
+            host = urllib.parse.urlparse(result).hostname
+            if any([excl in host for excl in self._exclude_nodes]):
+                logging.debug("Skipping {} as in the excluded hosts list".format(host))
+                continue
+            if host not in node_grouped_results:
+                node_grouped_results[host] = []
+            node_grouped_results[host].append(result)
 
+        if len(node_grouped_results) == 0:
+            # TODO: what really happens when we have this?
+            logging.warning("NO VALID URLs FOUND for {} from ESGF search {}".format(
+                var_config.name, ",".join(query.values())))
+            return None
+
+        cmip6_ds = None
+        download_path = os.path.join(var_config.root_path,
+                                     self.dataset.location.name,
+                                     os.path.basename(self.dataset.var_filepath(var_config, req_dates)))
+
+        logging.debug("\n".join(results))
+
+        for node, grouped_results in node_grouped_results.items():
+            logging.info("Attempting to open data from {}".format(node))
             try:
                 # http://xarray.pydata.org/en/stable/user-guide/io.html?highlight=opendap#opendap
                 # Avoid 500MB DAP request limit
-                cmip6_ds = xr.open_mfdataset(valid_urls,
+                cmip6_ds = xr.open_mfdataset(grouped_results,
                                              combine='by_coords',
                                              chunks={'time': '499MB'})
+            except OSError as e:
+                logging.error("Could not open data from {} - {}".format(node, e.filename))
+                continue
+            break
 
-                rename_vars = {var_config.prefix: var_config.name}
-                cmip6_da = getattr(cmip6_ds.rename(rename_vars), var_config.name)
+        if cmip6_ds is None:
+            logging.error("We have no URLS that provide data for {} using {}".format(var_config.name, ",".join(query.values())))
+            return None
 
-                if self.dataset.frequency == Frequency.MONTH and start_date.day > 1:
-                    start_date = start_date.replace(day=1)
+        try:
+            rename_vars = {var_config.prefix: var_config.name}
+            cmip6_da = getattr(cmip6_ds.rename(rename_vars), var_config.name)
 
-                cmip6_da = cmip6_da.sel(time=slice(start_date,
-                                                   end_date))
+            if self.dataset.frequency == Frequency.MONTH and start_date.day > 1:
+                start_date = start_date.replace(day=1)
 
-                # TODO: possibly other attributes, especially with ocean vars
-                if var_config.level:
-                    cmip6_da = cmip6_da.sel(plev=int(var_config.level) * 100)
+            cmip6_da = cmip6_da.sel(time=slice(start_date,
+                                               end_date))
 
-                cmip6_da = cmip6_da.sel(lat=slice(self.dataset.location.bounds[2],
-                                                  self.dataset.location.bounds[0]))
+            # TODO: possibly other attributes, especially with ocean vars
+            if var_config.level:
+                cmip6_da = cmip6_da.sel(plev=int(var_config.level) * 100)
 
-                # By this point the variable name has stored this info
-                for omit_coord in ["plev", "height"]:
-                    if omit_coord in cmip6_da.coords:
-                        cmip6_da = cmip6_da.drop_vars(omit_coord)
-            except (OSError, ValueError, IndexError) as e:
-                raise DownloaderError("Error encountered: {} for {}".format(e, results))
-            else:
-                logging.info("Writing {} to {}".format(cmip6_da, download_path))
-                os.makedirs(os.path.dirname(download_path), exist_ok=True)
-                cmip6_da.to_netcdf(download_path)
-                cmip6_da.close()
+            cmip6_da = cmip6_da.sel(lat=slice(self.dataset.location.bounds[2],
+                                              self.dataset.location.bounds[0]))
 
-            if os.path.exists(download_path):
-                return [download_path]
-            return [None]
+            # By this point the variable name has stored this info
+            for omit_coord in ["plev", "height"]:
+                if omit_coord in cmip6_da.coords:
+                    cmip6_da = cmip6_da.drop_vars(omit_coord)
+        except (OSError, ValueError, IndexError) as e:
+            raise DownloaderError("Error encountered: {} for {}".format(e, results))
+        else:
+            logging.info("Writing {} to {}".format(cmip6_da, download_path))
+            os.makedirs(os.path.dirname(download_path), exist_ok=True)
+            cmip6_da.to_netcdf(download_path)
+            cmip6_da.close()
+
+        if os.path.exists(download_path):
+            return [download_path]
+        return [None]
 
     @lru_cache(1000)
     def esgf_search(self,
