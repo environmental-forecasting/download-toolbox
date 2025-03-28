@@ -28,6 +28,7 @@ class DataCollection(metaclass=ABCMeta):
                  config_path: os.PathLike = None,
                  config_type: str = "data_collection",
                  path_components: list = None,
+                 dummy: bool = False,
                  **kwargs) -> None:
         self._identifier = identifier
 
@@ -37,6 +38,7 @@ class DataCollection(metaclass=ABCMeta):
 
         # TODO: seriously: root_path, path and base_path!? Rationalise this, too smelly for words
         self._base_path = base_path
+        self._dummy = dummy
         self._path_components = path_components
         self._root_path = None
         self._path = None
@@ -110,14 +112,17 @@ class DataCollection(metaclass=ABCMeta):
         if self._identifier is None:
             raise DataCollectionError("No identifier supplied")
 
-        if os.path.exists(self._path):
-            logging.debug("{} already exists".format(self._path))
-        else:
-            if not os.path.islink(self._path):
-                logging.info("Creating path: {}".format(self._path))
-                os.makedirs(self._path, exist_ok=True)
+        if not self._dummy:
+            if os.path.exists(self._path):
+                logging.debug("{} already exists".format(self._path))
             else:
-                logging.info("Skipping creation for symlink: {}".format(self._path))
+                if not os.path.islink(self._path):
+                    logging.info("Creating path: {}".format(self._path))
+                    os.makedirs(self._path, exist_ok=True)
+                else:
+                    logging.info("Skipping creation for symlink: {}".format(self._path))
+        else:
+            logging.debug("Avoiding creation of path {} as collection is marked dummy".format(self._path))
 
     def save_config(self):
         saved_config = self.config.render(self)
