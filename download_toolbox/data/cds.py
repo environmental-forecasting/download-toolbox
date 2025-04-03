@@ -1,5 +1,6 @@
 import datetime as dt
 import logging
+import re
 import requests
 import requests.adapters
 import os
@@ -22,7 +23,7 @@ class ERA5DatasetConfig(DatasetConfig):
         'tas': '2m_temperature',
         'ta': 'temperature',  # 500
         'tos': 'sea_surface_temperature',
-        'psl': 'surface_pressure',
+        'ps': 'surface_pressure',
         'zg': 'geopotential',  # 250 and 500
         'hus': 'specific_humidity',  # 1000
         'rlds': 'surface_thermal_radiation_downwards',
@@ -31,6 +32,8 @@ class ERA5DatasetConfig(DatasetConfig):
         'vas': '10m_v_component_of_wind',
         'ua': 'u_component_of_wind',
         'va': 'v_component_of_wind',
+        'sic': 'sea_ice_cover',
+        'psl': 'mean_sea_level_pressure',
     }
 
     def __init__(self,
@@ -169,7 +172,7 @@ class ERA5Downloader(ThreadedDownloader):
         # TODO: there is duplicated / messy code here from CDS API alterations, clean it up
         # New CDSAPI file holds more data_vars than just variable.
         # Omit them when figuring out default CDS variable name.
-        omit_vars = ("number", "expver")
+        omit_vars = {"number", "expver", "time", "date", "valid_time", "latitude", "longitude"}
         data_vars = set(ds.data_vars)
         var_list = list(data_vars.difference(omit_vars))
         if not var_list:
@@ -177,14 +180,21 @@ class ERA5Downloader(ThreadedDownloader):
         elif len(var_list) > 1:
             raise ValueError(f"""Multiple variables found in data file!
                                  There should only be one variable.
-                                 {var_list}""")
-        nom = var_list[0]
+                                 {var_list}"""
+                            )
+        src_var_name = var_list[0]
+        var_name = var_config.name
 
-        rename_vars = {}
-        if "valid_time" in ds:
+        # Rename time and variable names for consistency
+        rename_vars = {
+                       src_var_name: var_name,
+                       }
+        if "date" in ds:
+            rename_vars.update({"date": "time"})
+        elif "valid_time" in ds:
             rename_vars.update({"valid_time": "time"})
-        rename_vars.update({nom: var_config.name})
-        da = getattr(ds.rename(rename_vars), var_config.name)
+
+        da = getattr(ds.rename(rename_vars), var_name)
 
         # This data downloader handles different pressure_levels in independent
         # files rather than storing them all in separate dimension of one array/file.
@@ -194,10 +204,10 @@ class ERA5Downloader(ThreadedDownloader):
         if "number" in da.coords:
             da = da.drop_vars("number")
 
-        # Removing some coord attribute definition
+        # Updating coord attribute definitions (needs file read in with `decode_cf=False`)
         if "coordinates" in da.attrs:
             omit_attrs = ["number", "expver", "isobaricInhPa"]
-            attributes = da.attrs["coordinates"].replace("valid_time", "time").split()
+            attributes = re.sub(r"valid_time|date", "time", da.attrs["coordinates"]).split()
             attributes = [attr for attr in attributes if attr not in omit_attrs]
             da.attrs["coordinates"] = " ".join(attributes)
 
