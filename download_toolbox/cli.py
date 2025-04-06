@@ -190,6 +190,17 @@ class DownloadArgParser(BaseArgParser):
                           help="Overwrite dataset configuration",
                           action="store_true", default=False)
 
+        # Arguments for dataset and product_type
+        self.add_argument("-ds", "--dataset",
+                          help="Dataset to download",
+                          type=str)
+        self.add_argument("-pt", "--product-type",
+                          help="Product type for the dataset",
+                          type=str)
+        self.add_argument("--time",
+                          help="Time for the dataset",
+                          type=str)
+
     def add_var_specs(self):
         self._var_specs = True
 
@@ -203,6 +214,24 @@ class DownloadArgParser(BaseArgParser):
                                "pipes for multiple per var (e.g. ',,250|500,,'",
                           type=csv_of_csv_arg,
                           default=[])
+
+        return self
+
+    def add_derived_specs(self):
+        """Arguments for derived datasets"""
+        self.add_argument("--daily-statistic",
+                          help="Daily statistic for derived datasets",
+                          type=str,
+                          default="daily_mean")
+        self.add_argument("--time-zone",
+                          help="Time zone for derived datasets",
+                          type=str,
+                          default="utc+00:00")
+        self.add_argument("--derived-frequency",
+                          help="Frequency for derived datasets",
+                          type=str,
+                          default="1_hourly")
+
         return self
 
     def add_workers(self):
