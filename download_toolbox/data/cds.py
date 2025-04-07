@@ -158,10 +158,12 @@ class CDSDownloader(ThreadedDownloader):
         }
 
         # Add derived dataset-specific keys
+        stats_dataset = False
         if self.dataset_name in [
             "derived-era5-pressure-levels-daily-statistics",
             "derived-era5-single-levels-daily-statistics"
         ]:
+            stats_dataset = True
             retrieve_dict.update({
                 "daily_statistic": self.daily_statistic,
                 "time_zone": self.time_zone,
@@ -196,14 +198,16 @@ class CDSDownloader(ThreadedDownloader):
         if not monthly_request:
             retrieve_dict["day"] = ["{:02d}".format(d) for d in range(1, 32)]
 
-            if self.time and isinstance(self.time, list):
-                if self.time[0] == "all":
-                    time = ["{:02d}:00".format(h) for h in range(0, 24)]
+            # No time key required for daily stats dataset, instead uses `time_zone`
+            if not stats_dataset:
+                if self.time and isinstance(self.time, list):
+                    if self.time[0] == "all":
+                        time = ["{:02d}:00".format(h) for h in range(0, 24)]
+                    else:
+                        time = self.time
                 else:
-                    time = self.time
-            else:
-                time = ["12:00",]
-            retrieve_dict["time"] = time
+                    time = ["12:00",]
+                retrieve_dict["time"] = time
 
         if os.path.exists(temp_download_path):
             raise DownloaderError("{} already exists, this shouldn't be the case, please consider altering the "
