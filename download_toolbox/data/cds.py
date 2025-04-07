@@ -80,7 +80,7 @@ class CDSDownloader(ThreadedDownloader):
                  start_date: object,
                  dataset_name: Union[str, None] = None,
                  product_type: Union[str, None] = None,
-                 time: Union[str, None] = None,
+                 time: Union[list, None] = None,
                  daily_statistic: str = "daily_mean",
                  time_zone: str = "utc+00:00",
                  derived_frequency: str = "1_hourly",
@@ -143,7 +143,6 @@ class CDSDownloader(ThreadedDownloader):
             product_type = "reanalysis" if not monthly_request else "monthly_averaged_reanalysis_by_hour_of_day"
         else:
             product_type = self.product_type
-        time = self.time if self.time else ["12:00",]
 
         retrieve_dict = {
             "product_type": [product_type,],
@@ -151,8 +150,6 @@ class CDSDownloader(ThreadedDownloader):
             "year": [int(req_dates[0].year),],
             "month": list(set(["{:02d}".format(rd.month)
                                for rd in sorted(req_dates)])),
-            # TODO: assumption about the time of day!
-            "time": time,
             "format": "netcdf",
             # TODO: explicit, but should be implicit
             "grid": [0.25, 0.25],
@@ -199,7 +196,15 @@ class CDSDownloader(ThreadedDownloader):
 
         if not monthly_request:
             retrieve_dict["day"] = ["{:02d}".format(d) for d in range(1, 32)]
-            # retrieve_dict["time"] = ["{:02d}:00".format(h) for h in range(0, 24)]
+
+            if self.time and isinstance(self.time, list):
+                if self.time[0] == "all":
+                    time = ["{:02d}:00".format(h) for h in range(0, 24)]
+                else:
+                    time = self.time
+            else:
+                time = ["12:00",]
+            retrieve_dict["time"] = time
 
         if os.path.exists(temp_download_path):
             raise DownloaderError("{} already exists, this shouldn't be the case, please consider altering the "
@@ -496,7 +501,7 @@ def get_era5_available_date_range(dataset: str = "reanalysis-era5-single-levels"
 
 
 def cds_main():
-    args = DownloadArgParser().add_var_specs().add_derived_specs().add_workers().parse_args()
+    args = DownloadArgParser().add_var_specs().add_cds_specs().add_derived_specs().add_workers().parse_args()
 
     logging.info("CDS Data Downloading")
 
@@ -526,6 +531,7 @@ def cds_main():
             request_frequency=getattr(Frequency, args.output_group_by),
             dataset_name=args.dataset,
             product_type=args.product_type,
+            time=args.time,
             daily_statistic=args.daily_statistic,
             time_zone=args.time_zone,
             derived_frequency=args.derived_frequency,

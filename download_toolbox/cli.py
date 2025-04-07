@@ -190,22 +190,6 @@ class DownloadArgParser(BaseArgParser):
                           help="Overwrite dataset configuration",
                           action="store_true", default=False)
 
-        self.add_argument("--compress",
-                          help="Provide an integer from 1-9 (low to high) on how much to compress the output netCDF",
-                          default=None,
-                          type=int)
-
-        # Arguments for dataset and product_type
-        self.add_argument("-ds", "--dataset",
-                          help="Dataset to download",
-                          type=str)
-        self.add_argument("-pt", "--product-type",
-                          help="Product type for the dataset",
-                          type=str)
-        self.add_argument("--time",
-                          help="Time for the dataset",
-                          type=str)
-
     def add_var_specs(self):
         self._var_specs = True
 
@@ -219,6 +203,27 @@ class DownloadArgParser(BaseArgParser):
                                "pipes for multiple per var (e.g. ',,250|500,,'",
                           type=csv_of_csv_arg,
                           default=[])
+
+        return self
+
+    def add_cds_specs(self):
+        """Arguments for dataset and product_type"""
+        self.add_argument("-ds", "--dataset",
+                          help="Dataset to download",
+                          type=str)
+        self.add_argument("-pt", "--product-type",
+                          help="Product type for the dataset",
+                          type=str)
+        self.add_argument("--time",
+                          help="Comma separated list of times for the dataset ('00:00,01:00'...), or 'all' for all 24 hours",
+                          type=csv_arg,
+                          default=[])
+
+        # TODO: Pull this to constructor and update other downloaders
+        self.add_argument("--compress",
+                          help="Provide an integer from 1-9 (low to high) on how much to compress the output netCDF",
+                          default=None,
+                          type=int)
 
         return self
 
