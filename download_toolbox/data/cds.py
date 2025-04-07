@@ -15,7 +15,7 @@ from warnings import warn
 
 from download_toolbox.dataset import DatasetConfig
 from download_toolbox.data.utils import batch_requested_dates, xr_save_netcdf
-from download_toolbox.cli import DownloadArgParser
+from download_toolbox.cli import CDSDownloadArgParser, DownloadArgParser
 from download_toolbox.download import ThreadedDownloader, DownloaderError
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
@@ -500,7 +500,7 @@ def get_era5_available_date_range(dataset: str = "reanalysis-era5-single-levels"
 
 
 def cds_main():
-    args = DownloadArgParser().add_var_specs().add_cds_specs().add_derived_specs().add_workers().parse_args()
+    args = CDSDownloadArgParser().add_var_specs().add_cds_specs().add_derived_specs().add_workers().parse_args()
 
     logging.info("CDS Data Downloading")
 
