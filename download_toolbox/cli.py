@@ -206,6 +206,28 @@ class DownloadArgParser(BaseArgParser):
 
         return self
 
+    def add_workers(self):
+        self.add_argument("-w", "--workers", default=8, type=int)
+        return self
+
+    def parse_args(self,
+                   *args,
+                   **kwargs):
+        args = super().parse_args(*args, **kwargs)
+
+        if self._var_specs:
+            if not (len(args.vars) > 0 and len(args.vars) == len(args.levels)):
+                raise RuntimeError("You must specify variables and levels of equal length, >=1: {} != {}".
+                                   format(args.vars, args.levels))
+        return args
+
+
+class CDSDownloadArgParser(DownloadArgParser):
+    def __init__(self,
+                 *args,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+
     def add_cds_specs(self):
         """Arguments for dataset and product_type"""
         self.add_argument("-ds", "--dataset",
@@ -236,19 +258,4 @@ class DownloadArgParser(BaseArgParser):
                           default="1_hourly")
 
         return self
-
-    def add_workers(self):
-        self.add_argument("-w", "--workers", default=8, type=int)
-        return self
-
-    def parse_args(self,
-                   *args,
-                   **kwargs):
-        args = super().parse_args(*args, **kwargs)
-
-        if self._var_specs:
-            if not (len(args.vars) > 0 and len(args.vars) == len(args.levels)):
-                raise RuntimeError("You must specify variables and levels of equal length, >=1: {} != {}".
-                                   format(args.vars, args.levels))
-        return args
 
