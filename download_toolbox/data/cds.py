@@ -162,7 +162,6 @@ class CDSDownloader(ThreadedDownloader):
             "derived-era5-pressure-levels-daily-statistics",
             "derived-era5-single-levels-daily-statistics"
         ]:
-            retrieve_dict.pop("time")
             retrieve_dict.update({
                 "daily_statistic": self.daily_statistic,
                 "time_zone": self.time_zone,
