@@ -14,7 +14,7 @@ from typing import Union
 from warnings import warn
 
 from download_toolbox.dataset import DatasetConfig
-from download_toolbox.data.utils import batch_requested_dates
+from download_toolbox.data.utils import batch_requested_dates, xr_save_netcdf
 from download_toolbox.cli import DownloadArgParser
 from download_toolbox.download import ThreadedDownloader, DownloaderError
 from download_toolbox.location import Location
@@ -84,6 +84,7 @@ class CDSDownloader(ThreadedDownloader):
                  daily_statistic: str = "daily_mean",
                  time_zone: str = "utc+00:00",
                  derived_frequency: str = "1_hourly",
+                 compress: Union[int, None] = None,
                  **kwargs):
         self.client = cds.Client(progress=show_progress)
         self.dataset_name = dataset_name
@@ -93,6 +94,7 @@ class CDSDownloader(ThreadedDownloader):
         self.daily_statistic = daily_statistic
         self.time_zone = time_zone
         self.derived_frequency = derived_frequency
+        self.compress = compress
 
         super().__init__(dataset,
                          *args,
@@ -275,7 +277,7 @@ class CDSDownloader(ThreadedDownloader):
             # Ref: https://confluence.ecmwf.int/pages/viewpage.action?pageId=173385064
             # da = da.sel(expver=1).combine_first(da.sel(expver=5))
         logging.info("Saving corrected ERA5 file to {}".format(download_path))
-        da.to_netcdf(download_path)
+        xr_save_netcdf(da, download_path, complevel=self.compress)
         da.close()
 
         if os.path.exists(temp_download_path):
@@ -526,7 +528,8 @@ def cds_main():
             product_type=args.product_type,
             daily_statistic=args.daily_statistic,
             time_zone=args.time_zone,
-            derived_frequency=args.derived_frequency
+            derived_frequency=args.derived_frequency,
+            compress=args.compress,
         )
         cds.download()
 

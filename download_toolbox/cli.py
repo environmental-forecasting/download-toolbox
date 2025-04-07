@@ -190,6 +190,11 @@ class DownloadArgParser(BaseArgParser):
                           help="Overwrite dataset configuration",
                           action="store_true", default=False)
 
+        self.add_argument("--compress",
+                          help="Provide an integer from 1-9 (low to high) on how much to compress the output netCDF",
+                          default=None,
+                          type=int)
+
         # Arguments for dataset and product_type
         self.add_argument("-ds", "--dataset",
                           help="Dataset to download",
