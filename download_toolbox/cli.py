@@ -203,6 +203,7 @@ class DownloadArgParser(BaseArgParser):
                                "pipes for multiple per var (e.g. ',,250|500,,'",
                           type=csv_of_csv_arg,
                           default=[])
+
         return self
 
     def add_workers(self):
@@ -219,4 +220,42 @@ class DownloadArgParser(BaseArgParser):
                 raise RuntimeError("You must specify variables and levels of equal length, >=1: {} != {}".
                                    format(args.vars, args.levels))
         return args
+
+
+class CDSDownloadArgParser(DownloadArgParser):
+    def __init__(self,
+                 *args,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def add_cds_specs(self):
+        """Arguments for dataset and product_type"""
+        self.add_argument("-ds", "--dataset",
+                          help="Dataset to download",
+                          type=str)
+        self.add_argument("-pt", "--product-type",
+                          help="Product type for the dataset",
+                          type=str)
+        self.add_argument("--time",
+                          help="Comma separated list of times for the dataset ('00:00,01:00'...), or 'all' for all 24 hours",
+                          type=csv_arg,
+                          default=[])
+        return self
+
+    def add_derived_specs(self):
+        """Arguments for derived datasets"""
+        self.add_argument("--daily-statistic",
+                          help="Daily statistic for derived datasets",
+                          type=str,
+                          default="daily_mean")
+        self.add_argument("--time-zone",
+                          help="Time zone for derived datasets",
+                          type=str,
+                          default="utc+00:00")
+        self.add_argument("--derived-frequency",
+                          help="Frequency for derived datasets",
+                          type=str,
+                          default="1_hourly")
+
+        return self
 
