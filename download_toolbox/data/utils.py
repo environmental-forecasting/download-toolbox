@@ -5,6 +5,8 @@ import os
 import pandas as pd
 import xarray as xr
 
+from typing import Union
+
 
 def batch_requested_dates(dates: object,
                           attribute: str = "month") -> object:
@@ -82,4 +84,23 @@ def merge_files(new_datafile: object,
         new_ds.to_netcdf(new_datafile)
         os.unlink(other_datafile)
         os.unlink(moved_new_datafile)
+
+
+def xr_save_netcdf(da: xr.DataArray, file_path: str, complevel: Union[int, None] = None) -> None:
+    """
+    Save xarray Dataarray to netCDF file with optional compression.
+
+    Args:
+        da: The xarray dataarray to be output to netCDF.
+        file_path: Path to save the netCDF file.
+        complevel (optional): Level of compression to apply.
+                              Defaults to None.
+    """
+    if complevel:
+        compression = dict(zlib=True, complevel=int(complevel))
+        var_encoding = {da.name: compression}
+        coords_encoding = {coord: compression for coord in da.coords}
+        da.to_netcdf(file_path, mode="w", encoding=var_encoding | coords_encoding)
+    else:
+        da.to_netcdf(file_path)
 
