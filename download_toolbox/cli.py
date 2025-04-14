@@ -259,3 +259,44 @@ class CDSDownloadArgParser(DownloadArgParser):
 
         return self
 
+
+class AWSDownloadArgParser(DownloadArgParser):
+    def __init__(self,
+                 *args,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def add_aws_specs(self):
+        """Arguments for dataset and product_type"""
+        self.add_argument("-bu", "--bucket",
+                          help="Bucket to download from",
+                          type=str)
+        self.add_argument("-ds", "--dataset",
+                          help="Dataset to download",
+                          type=str)
+        self.add_argument("-pt", "--product-type",
+                          help="Product type for the dataset",
+                          type=str)
+        self.add_argument("--time",
+                          help="Comma separated list of times for the dataset ('00:00,01:00'...), or 'all' for all 24 hours",
+                          type=csv_arg,
+                          default=[])
+        return self
+
+    def add_derived_specs(self):
+        """Arguments for derived datasets"""
+        self.add_argument("--daily-statistic",
+                          help="Daily statistic for derived datasets",
+                          type=str,
+                          default="daily_mean")
+        self.add_argument("--time-zone",
+                          help="Time zone for derived datasets",
+                          type=str,
+                          default="utc+00:00")
+        self.add_argument("--derived-frequency",
+                          help="Frequency for derived datasets",
+                          type=str,
+                          default="1_hourly")
+
+        return self
+
