@@ -755,6 +755,7 @@ class AWSDownloader(ThreadedDownloader):
                     continue
                 grib_table, parameter_id, ecmwf_short_name = match.group(1).split("_")
                 matching_files[cmip6_variable].append(f"s3://{bucket_name}/" + nc_file_path)
+            # Move to the next month (even if no. of days less than 31 days)
             current += dt.timedelta(days=32)
             current = current.replace(day=1)
 
@@ -852,6 +853,11 @@ class AWSDownloader(ThreadedDownloader):
         else:
             prefix = f"e5.oper.{product_code}.{dataset_code}/"
 
+        # Extract root_path from dataset config
+        temp_download_path = os.path.join(self.dataset._root_path, "cache")
+        fs = fsspec.filesystem("filecache", target_protocol="s3", target_options={"anon": True},
+                                cache_storage=temp_download_path)
+
         # Loop through different pressure levels
         downloaded_paths = []
         for var_levels in args:
@@ -868,11 +874,6 @@ class AWSDownloader(ThreadedDownloader):
             filtered_files = self.__list_matching_files(prefix, start_dt, end_dt,
                                 cmip6_variable_code, ecmwf_variable_code, bucket_name)
 
-            temp_download_path = os.path.join(var_config.root_path,
-                                            cmip6_variable_code,
-                                            "temp.{}".format(os.path.basename(
-                                                self.dataset.var_filepath(var_config, req_dates))))
-
             download_path = os.path.join(var_config.root_path,
                                         self.dataset.location.name,
                                         os.path.basename(self.dataset.var_filepath(var_config, req_dates)))
@@ -881,48 +882,27 @@ class AWSDownloader(ThreadedDownloader):
             try:
                 logging.info(f"Downloading data for {var_config.name}...")
                 logging.debug(f"Request file:\n{filtered_files[cmip6_variable_code]}")
-                fs = fsspec.filesystem("s3", anon=True)
-                fs = fsspec.filesystem("filecache", target_protocol="s3", target_options={"anon": True})
-                # fsspec_caching = {
-                #     "cache_type": "blockcache",  # block cache stores blocks of fixed size and uses eviction using a LRU strategy.
-                #     "block_size": 100
-                #     * 1024
-                #     * 1024,  # size in bytes per block, adjust depends on the file size but the recommended size is in the MB
-                # }
 
                 ds = xr.open_mfdataset(
                     [fs.open(filtered_file, mode="rb") for filtered_file in filtered_files[cmip6_variable_code]],
-                    # [fs.open(filtered_file, mode="rb", **fsspec_caching) for filtered_file in filtered_files[cmip6_variable_code]],
                     combine="by_coords",
                     engine="h5netcdf",
                     parallel=True,
                     chunks={},
                     )
-                if os.path.exists(temp_download_path):
-                    ds_tmp = xr.open_dataset(temp_download_path)
-                    if ds.identical(ds_tmp):
-                        logging.info("Temporary file matches downloaded data, download skipped, using local copy.")
-                        ds.close()
-                        ds = ds_tmp
-                    else:
-                        logging.debug("Removing {}".format(temp_download_path))
-                        os.unlink(temp_download_path)
-                        ds.to_netcdf(temp_download_path)
-                        logging.info("Download completed: {}".format(temp_download_path))
-                else:
-                    ds.to_netcdf(temp_download_path)
-                    logging.info("Download completed: {}".format(temp_download_path))
 
             except Exception as e:
                 logging.exception("{} not downloaded, look at the problem".format(temp_download_path))
                 self.missing_dates.extend(req_dates)
                 return []
 
-            # ds = xr.open_dataset(temp_download_path)
-
             # Extract pressure level
             if "level" in ds.dims:
+                # Clearly have multiple pressure levels
                 ds = ds.sel(level=var_config.level).drop_vars("level")
+            else:
+                # Surface level data
+                ds = ds.sel(time=slice(start_dt, end_dt))
 
             # Roll the data to have the 0 degree longitude at the center
             ds.coords["longitude"] = (ds.coords["longitude"] + 180) % 360 - 180
