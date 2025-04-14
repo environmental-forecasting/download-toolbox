@@ -1,4 +1,5 @@
 import boto3
+import concurrent
 import datetime as dt
 import fsspec
 import logging
@@ -12,6 +13,8 @@ import pandas as pd
 import xarray as xr
 
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 from pprint import pformat
 from typing import Union
 from warnings import warn
@@ -95,7 +98,7 @@ class AWSDatasetConfig(DatasetConfig):
                 "product_type": "reanalysis", "dataset": "pressure-level"},
         # Ref: https://codes.ecmwf.int/grib/param-db/175
         # No reanalysis for this param in AWS ERA5 dataset, only forecast
-        # "rlds": {"id": 175, "short_name": "strd"},         # Downward longwave radiation flux at surface (CMIP6: rlds, ECMWF ID: 175)
+        # "rlds": {"id": 175, "short_name": "strd"},        # Downward longwave radiation flux at surface (CMIP6: rlds, ECMWF ID: 175)
         #         "product_type": "forecast", "dataset": "accumulation"},
         # Ref: https://codes.ecmwf.int/grib/param-db/169
         # No reanalysis for this param in AWS ERA5 dataset, only forecast
@@ -718,7 +721,9 @@ class AWSDownloader(ThreadedDownloader):
             }
         }
 
-    def __list_matching_files(self, prefix, start_date, end_date, variable, bucket_name):
+    @staticmethod
+    @lru_cache
+    def __list_matching_files(prefix, start_date, end_date, cmip6_variable, ecmwf_variable, bucket_name):
         s3 = boto3.resource("s3", config=Config(signature_version=UNSIGNED))
         bucket = s3.Bucket(bucket_name)
         matching_files = defaultdict(list)
@@ -744,47 +749,92 @@ class AWSDownloader(ThreadedDownloader):
                 if not (start_date <= file_start_date <= end_date):
                     continue
                 # Filter by parameter
-                ecmwf_variable_code = self.dataset.cmip6_map[variable]["short_name"]
-                pattern = rf"\.(\d+_\d+_{ecmwf_variable_code})\." # Get the parameter details section of filename
+                pattern = rf"\.(\d+_\d+_{ecmwf_variable})\." # Get the parameter details section of filename
                 match = re.search(pattern, nc_file_path)
                 if not match:
                     continue
                 grib_table, parameter_id, ecmwf_short_name = match.group(1).split("_")
-                matching_files[variable].append(f"s3://{bucket_name}/" + nc_file_path)
+                matching_files[cmip6_variable].append(f"s3://{bucket_name}/" + nc_file_path)
             current += dt.timedelta(days=32)
             current = current.replace(day=1)
 
         return matching_files
 
+    def download(self):
+        """Handles concurrent (threaded) downloading for variables
+
+        This takes dates, variables and levels as configured, batches them into
+        requests and submits those via a ThreadPoolExecutor for concurrent
+        downloading. Returns nothing, relies on _single_download to implement
+        appropriate updates to this object to record state changes arising from
+        downloading.
+        """
+
+        logging.info("Building request(s), downloading and averaging "
+                     "from {} API".format(self.dataset.identifier.upper()))
+
+        req_list = list()
+        var_config_collection = defaultdict(list)
+
+        # Collate variables with different pressure levels together
+        # Avoids needing to download the same file repeatedly from AWS.
+        for var_config in self.dataset.variables:
+            dates = self.dataset.filter_extant_data(var_config, self.dates)
+
+            for req_date_batch in batch_requested_dates(dates=dates, attribute=self.request_frequency.attribute):
+                logging.info("Processing single download for {} with {} dates".
+                             format(var_config.name, len(req_date_batch)))
+
+                var_config_collection[var_config.prefix].append((var_config, req_date_batch))
+
+        for var_collection in var_config_collection.values():
+            req_list.append([var_collection])
+
+        max_workers = min(len(req_list), self._max_threads)
+
+        if max_workers > 0:
+            logging.info("Creating thread pool with {} workers to service {} batches"
+                         .format(max_workers, len(req_list)))
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = []
+
+                for args in req_list:
+                    future = executor.submit(self.download_method, *args)
+                    futures.append(future)
+
+                for future in concurrent.futures.as_completed(futures):
+                    try:
+                        files_downloaded = future.result()
+
+                        if files_downloaded is not None:
+                            logging.info("{} files downloaded".format(len(files_downloaded)))
+                            self._files_downloaded.extend(files_downloaded)
+                        else:
+                            logging.warning("Nothing downloaded from threaded batch")
+
+                    except Exception as e:
+                        logging.exception("Thread failure: {}".format(e))
+
+        logging.info("{} files downloaded".format(len(self._files_downloaded)))
 
     def _single_api_download(self,
-                             var_config: object,
-                             req_dates: object,
+                            args: list,
+                            #  var_config_list: list[object],
+                            #  req_dates_list: list[object],
                              ) -> list:
         """Implements a single download from CDS API
 
         Args:
-            var_config:
-            req_dates: The requested dates
+            args: A list of tuples containing (`var_config`, `req_dates`)
         """
-
-        logging.debug("Processing {} dates for {}".format(len(req_dates), var_config))
+        # logging.debug("Processing {} dates for {}".format(len(req_dates), var_config))
         # TODO: Add monthly request handling
         #       for AWS data, this is not currently supported
         #       as the data is not available in monthly files
         monthly_request = self.dataset.frequency < Frequency.DAY
         if monthly_request:
             raise DownloaderError("Monthly requests are not supported for AWS data, use `download_cds` instead")
-
-        temp_download_path = os.path.join(var_config.root_path,
-                                          self.dataset.location.name,
-                                          "temp.{}".format(os.path.basename(
-                                              self.dataset.var_filepath(var_config, req_dates))))
-
-        download_path = os.path.join(var_config.root_path,
-                                     self.dataset.location.name,
-                                     os.path.basename(self.dataset.var_filepath(var_config, req_dates)))
-        os.makedirs(os.path.dirname(download_path), exist_ok=True)
 
         bucket_name = "nsf-ncar-era5"
         product_type_map = self.__product_type_map()
@@ -802,80 +852,108 @@ class AWSDownloader(ThreadedDownloader):
         else:
             prefix = f"e5.oper.{product_code}.{dataset_code}/"
 
-        start_date = req_dates[0]
-        end_date = req_dates[-1]
+        # Loop through different pressure levels
+        downloaded_paths = []
+        for var_levels in args:
+            var_config, req_dates = var_levels
+            start_date = req_dates[0]
+            end_date = req_dates[-1]
 
-        start_dt = dt.datetime.combine(start_date, dt.time(0, 0))
-        end_dt = dt.datetime.combine(end_date, dt.time(0, 0))
+            start_dt = dt.datetime.combine(start_date, dt.time(0, 0))
+            end_dt = dt.datetime.combine(end_date, dt.time(0, 0))
 
-        # Retrieve filtered file list
-        cmip6_variable_code = var_config.prefix
-        filtered_files = self.__list_matching_files(prefix, start_dt, end_dt, cmip6_variable_code, bucket_name)
+            # Retrieve filtered file list
+            cmip6_variable_code = var_config.prefix
+            ecmwf_variable_code = self.dataset.cmip6_map[cmip6_variable_code]["short_name"]
+            filtered_files = self.__list_matching_files(prefix, start_dt, end_dt,
+                                cmip6_variable_code, ecmwf_variable_code, bucket_name)
 
-        try:
-            logging.info(f"Downloading data for {var_config.name}...")
-            logging.debug(f"Request file:\n{filtered_files[cmip6_variable_code]}")
-            fs = fsspec.filesystem("s3", anon=True)
-            ds = xr.open_mfdataset(
-                [fs.open(filtered_file, mode="rb") for filtered_file in filtered_files[cmip6_variable_code]],
-                combine="by_coords",
-                engine="h5netcdf",
-                )
-            if os.path.exists(temp_download_path):
-                ds_tmp = xr.open_dataset(temp_download_path)
-                if ds.identical(ds_tmp):
-                    logging.info("Temporary file matches downloaded data, download skipped, using local copy.")
-                    ds.close()
-                    ds = ds_tmp
+            temp_download_path = os.path.join(var_config.root_path,
+                                            cmip6_variable_code,
+                                            "temp.{}".format(os.path.basename(
+                                                self.dataset.var_filepath(var_config, req_dates))))
+
+            download_path = os.path.join(var_config.root_path,
+                                        self.dataset.location.name,
+                                        os.path.basename(self.dataset.var_filepath(var_config, req_dates)))
+            os.makedirs(os.path.dirname(temp_download_path), exist_ok=True)
+            os.makedirs(os.path.dirname(download_path), exist_ok=True)
+            try:
+                logging.info(f"Downloading data for {var_config.name}...")
+                logging.debug(f"Request file:\n{filtered_files[cmip6_variable_code]}")
+                fs = fsspec.filesystem("s3", anon=True)
+                fs = fsspec.filesystem("filecache", target_protocol="s3", target_options={"anon": True})
+                # fsspec_caching = {
+                #     "cache_type": "blockcache",  # block cache stores blocks of fixed size and uses eviction using a LRU strategy.
+                #     "block_size": 100
+                #     * 1024
+                #     * 1024,  # size in bytes per block, adjust depends on the file size but the recommended size is in the MB
+                # }
+
+                ds = xr.open_mfdataset(
+                    [fs.open(filtered_file, mode="rb") for filtered_file in filtered_files[cmip6_variable_code]],
+                    # [fs.open(filtered_file, mode="rb", **fsspec_caching) for filtered_file in filtered_files[cmip6_variable_code]],
+                    combine="by_coords",
+                    engine="h5netcdf",
+                    parallel=True,
+                    chunks={},
+                    )
+                if os.path.exists(temp_download_path):
+                    ds_tmp = xr.open_dataset(temp_download_path)
+                    if ds.identical(ds_tmp):
+                        logging.info("Temporary file matches downloaded data, download skipped, using local copy.")
+                        ds.close()
+                        ds = ds_tmp
+                    else:
+                        logging.debug("Removing {}".format(temp_download_path))
+                        os.unlink(temp_download_path)
+                        ds.to_netcdf(temp_download_path)
+                        logging.info("Download completed: {}".format(temp_download_path))
                 else:
-                    logging.debug("Removing {}".format(temp_download_path))
-                    os.unlink(temp_download_path)
                     ds.to_netcdf(temp_download_path)
                     logging.info("Download completed: {}".format(temp_download_path))
 
-        except Exception as e:
-            logging.exception("{} not downloaded, look at the problem".format(temp_download_path))
-            self.missing_dates.extend(req_dates)
-            return []
+            except Exception as e:
+                logging.exception("{} not downloaded, look at the problem".format(temp_download_path))
+                self.missing_dates.extend(req_dates)
+                return []
 
-        # ds = xr.open_dataset(temp_download_path)
+            # ds = xr.open_dataset(temp_download_path)
 
-        # Extract pressure level
-        if "level" in ds.dims:
-            ds = ds.sel(level=var_config.level).drop_vars("level")
+            # Extract pressure level
+            if "level" in ds.dims:
+                ds = ds.sel(level=var_config.level).drop_vars("level")
 
-        # Roll the data to have the 0 degree longitude at the center
-        ds.coords["longitude"] = (ds.coords["longitude"] + 180) % 360 - 180
-        ds = ds.sortby(ds.longitude)
+            # Roll the data to have the 0 degree longitude at the center
+            ds.coords["longitude"] = (ds.coords["longitude"] + 180) % 360 - 180
+            ds = ds.sortby(ds.longitude)
 
-        # Extract region
-        max_lat, min_lon, min_lat, max_lon = self.dataset.location.bounds
-        ds_region = ds.sel(longitude=(ds.longitude <= max_lon) | (ds.longitude >= min_lon),
-                        latitude=(ds.latitude <= max_lat) & (ds.latitude >= min_lat))
+            # Extract region
+            max_lat, min_lon, min_lat, max_lon = self.dataset.location.bounds
+            ds_region = ds.sel(longitude=(ds.longitude <= max_lon) | (ds.longitude >= min_lon),
+                            latitude=(ds.latitude <= max_lat) & (ds.latitude >= min_lat))
 
-        # Figure out the data variable name.
-        # It should have the following three dimensions by this point:
-        expected_dims = ["time", "latitude", "longitude"]
-        for var in ds_region.data_vars:
-            var_dims = ds_region[var].dims
-            if all([dim in var_dims for dim in expected_dims]):
-                src_var_name = var
+            # Figure out the data variable name.
+            # It should have the following three dimensions by this point:
+            expected_dims = ["time", "latitude", "longitude"]
+            for var in ds_region.data_vars:
+                var_dims = ds_region[var].dims
+                if all([dim in var_dims for dim in expected_dims]):
+                    src_var_name = var
 
-        var_name = var_config.name
+            var_name = var_config.name
 
-        # Rename variable name for consistency
-        rename_vars = {src_var_name: var_name}
-        da = getattr(ds_region.rename(rename_vars), var_name)
+            # Rename variable name for consistency
+            rename_vars = {src_var_name: var_name}
+            da = getattr(ds_region.rename(rename_vars), var_name)
 
-        logging.info("Saving corrected ERA5 file to {}".format(download_path))
-        da.to_netcdf(download_path)
-        ds.close()
+            logging.info("Saving corrected ERA5 file to {}".format(download_path))
+            da.to_netcdf(download_path)
+            ds.close()
 
-        if os.path.exists(temp_download_path):
-            logging.debug("Removing {}".format(temp_download_path))
-            os.unlink(temp_download_path)
+            downloaded_paths.append(download_path)
 
-        return [download_path]
+        return downloaded_paths
 
     def _single_download(self,
                          var_config: object,
@@ -968,7 +1046,7 @@ def era5_main():
 def aws_main():
     args = AWSDownloadArgParser().add_var_specs().add_aws_specs().add_derived_specs().add_workers().parse_args()
 
-    logging.info(f"AWS `{args.bucket}` Data Downloading")
+    logging.info("AWS Data Downloading")
 
     location = Location(
         name=args.hemisphere,
