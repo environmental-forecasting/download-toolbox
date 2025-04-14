@@ -750,7 +750,7 @@ class AWSDownloader(ThreadedDownloader):
                 if not match:
                     continue
                 grib_table, parameter_id, ecmwf_short_name = match.group(1).split("_")
-                matching_files[variable].append("s3://nsf-ncar-era5/" + nc_file_path)
+                matching_files[variable].append(f"s3://{bucket_name}/" + nc_file_path)
             current += dt.timedelta(days=32)
             current = current.replace(day=1)
 
@@ -773,6 +773,8 @@ class AWSDownloader(ThreadedDownloader):
         #       for AWS data, this is not currently supported
         #       as the data is not available in monthly files
         monthly_request = self.dataset.frequency < Frequency.DAY
+        if monthly_request:
+            raise DownloaderError("Monthly requests are not supported for AWS data, use `download_cds` instead")
 
         temp_download_path = os.path.join(var_config.root_path,
                                           self.dataset.location.name,
@@ -810,10 +812,6 @@ class AWSDownloader(ThreadedDownloader):
         cmip6_variable_code = var_config.prefix
         filtered_files = self.__list_matching_files(prefix, start_dt, end_dt, cmip6_variable_code, bucket_name)
 
-        if os.path.exists(temp_download_path):
-            raise DownloaderError("{} already exists, this shouldn't be the case, please consider altering the "
-                                  "time resolution of request to avoid downloaded data clashes".format(temp_download_path))
-
         try:
             logging.info(f"Downloading data for {var_config.name}...")
             logging.debug(f"Request file:\n{filtered_files[cmip6_variable_code]}")
@@ -823,9 +821,17 @@ class AWSDownloader(ThreadedDownloader):
                 combine="by_coords",
                 engine="h5netcdf",
                 )
-            # ds.to_netcdf(temp_download_path)
-            # ds.close()
-            logging.info("Download completed: {}".format(temp_download_path))
+            if os.path.exists(temp_download_path):
+                ds_tmp = xr.open_dataset(temp_download_path)
+                if ds.identical(ds_tmp):
+                    logging.info("Temporary file matches downloaded data, download skipped, using local copy.")
+                    ds.close()
+                    ds = ds_tmp
+                else:
+                    logging.debug("Removing {}".format(temp_download_path))
+                    os.unlink(temp_download_path)
+                    ds.to_netcdf(temp_download_path)
+                    logging.info("Download completed: {}".format(temp_download_path))
 
         except Exception as e:
             logging.exception("{} not downloaded, look at the problem".format(temp_download_path))
@@ -863,8 +869,11 @@ class AWSDownloader(ThreadedDownloader):
 
         logging.info("Saving corrected ERA5 file to {}".format(download_path))
         da.to_netcdf(download_path)
-        da.close()
         ds.close()
+
+        if os.path.exists(temp_download_path):
+            logging.debug("Removing {}".format(temp_download_path))
+            os.unlink(temp_download_path)
 
         return [download_path]
 
