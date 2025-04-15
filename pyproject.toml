@@ -44,7 +44,7 @@ classifiers = [
 ]
 
 [project.scripts]
-download_aws = "download_toolbox.data.cds:aws_main"
+download_aws = "download_toolbox.data.aws:main"
 download_cds = "download_toolbox.data.cds:cds_main"
 download_cmip = "download_toolbox.data.esgf:main"
 download_era5 = "download_toolbox.data.cds:era5_main"
