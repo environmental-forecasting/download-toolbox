@@ -1013,6 +1013,11 @@ class AWSDownloader(ThreadedDownloader):
 
         return downloaded_paths
 
+    def _single_download(self,
+                         args: list) -> list:
+        logging.warning("You're not going to get data by calling this! "
+                        "Set download_method to an actual implementation.")
+
 
 def cds_main():
     args = CDSDownloadArgParser().add_var_specs().add_cds_specs().add_derived_specs().add_workers().parse_args()
