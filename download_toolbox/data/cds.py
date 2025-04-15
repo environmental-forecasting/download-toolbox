@@ -575,19 +575,40 @@ def get_era5_available_date_range(dataset: str = "reanalysis-era5-single-levels"
     date_end = pd.Timestamp(pd.to_datetime(time_end).date())
     return date_start, date_end
 
+
 class AWSDownloader(ThreadedDownloader):
+    """
+    Downloader class for retrieving ERA5 climate reanalysis data from AWS.
+
+    Inherits from `ThreadedDownloader`, allowing concurrent downloads of variables
+    and date configurations.
+    """
     def __init__(self,
                  dataset: CDSDatasetConfig,
                  *args,
-                 show_progress: bool = False,
                  start_date: object,
                  end_date: object,
-                 compress: Union[int, None] = None,
+                 compress: int = 0,
                  **kwargs):
+        """
+        Initialise the AWSDownloader instance.
+
+        Args:
+            dataset: Dataset configuration object.
+            *args: Additional positional arguments to pass to the base class.
+            start_date: Start date for the data to download.
+            end_date: End date for the data to download.
+            compress: Compression level for saved NetCDF files.
+                      0 or `None` for no compression.
+                      (Defaults to 0. ).
+            **kwargs: Additional keyword arguments passed to the base class.
+
+        Raises:
+            DownloaderError: If `start_date` or `end_date` are outside AWS ERA5 data range.
+        """
         # Date ranges available from AWS data
         era5_start = dt.date(1940, 1, 1)
         era5_end = dt.date(2024, 12, 31)
-        self.client = cds.Client(progress=show_progress)
         logging.getLogger("cdsapi").setLevel(logging.WARNING)
 
         if start_date < era5_start:
@@ -614,10 +635,17 @@ class AWSDownloader(ThreadedDownloader):
 
     @staticmethod
     def __product_type_map() -> dict:
-        """Returns a mapping of variable names to CDS API variables"""
-        # Reference following ECMWF Docs on documentation details
-        # https://confluence.ecmwf.int/pages/viewpage.action?pageId=85402030#ERA5terminology:analysisandforecast;timeandsteps;instantaneousandaccumulatedandmeanratesandmin/maxparameters-Analysisandforecast
-        # Including difference between 'an' and 'fc'
+        """
+        Get mapping of short codes for product types.
+
+        Returns:
+            Product type mapping with keys like "reanalysis", "forecast", etc.
+
+        Notes:
+            * Reference following ECMWF Docs on documentation details
+            * https://confluence.ecmwf.int/pages/viewpage.action?pageId=85402030#ERA5terminology:analysisandforecast;timeandsteps;instantaneousandaccumulatedandmeanratesandmin/maxparameters-Analysisandforecast
+            * Including difference between 'an' and 'fc'
+        """
         return {
             "reanalysis": {
                 "short-code": "an",
@@ -644,7 +672,12 @@ class AWSDownloader(ThreadedDownloader):
 
     @staticmethod
     def __dataset_map() -> dict:
-        """Returns a mapping of dataset type to CDS short-code"""
+        """
+        Get mapping of dataset type long name to ECMWF short-code and product types.
+
+        Returns:
+            Dataset type mapping for ERA5 datasets.
+        """
         return {
             "pressure-level": {
                 "short-code": "pl",
@@ -714,7 +747,29 @@ class AWSDownloader(ThreadedDownloader):
 
     @staticmethod
     @lru_cache
-    def __list_matching_files(prefix, start_date, end_date, cmip6_variable, ecmwf_variable, bucket_name, multiple_levels: bool):
+    def __list_matching_files(prefix: str,
+                              start_date: dt.datetime,
+                              end_date: dt.datetime,
+                              cmip6_variable: str,
+                              ecmwf_variable: str,
+                              bucket_name: str,
+                              multiple_levels: bool,
+                              ) -> dict:
+        """
+        AWS S3 file paths matching date range and variable filters.
+
+        Args:
+            prefix: S3 prefix path for files.
+            start_date: Start datetime to filter.
+            end_date: End datetime to filter.
+            cmip6_variable: Variable name in CMIP6 format.
+            ecmwf_variable: Variable name in ECMWF format.
+            bucket_name: AWS S3 bucket name.
+            multiple_levels: Whether variable is multi-level (pressure level) or not.
+
+        Returns:
+            Dictionary of matching files grouped by variable.
+        """
         s3 = boto3.resource("s3", config=Config(signature_version=UNSIGNED))
         bucket = s3.Bucket(bucket_name)
         matching_files = defaultdict(list)
@@ -762,13 +817,17 @@ class AWSDownloader(ThreadedDownloader):
         return matching_files
 
     def download(self):
-        """Handles concurrent (threaded) downloading for variables
+        """
+        Perform multi-threaded download of ERA5 data from AWS.
 
-        This takes dates, variables and levels as configured, batches them into
-        requests and submits those via a ThreadPoolExecutor for concurrent
-        downloading. Returns nothing, relies on _single_download to implement
+        Collects variable and date configurations, batches them for concurrent downloading,
+        and uses `ProcessPoolExecutor` to perform downloads in parallel.
+
+        Returns nothing, relies on _single_download to implement
         appropriate updates to this object to record state changes arising from
         downloading.
+
+        Updates the internal `_files_downloaded` list with paths to downloaded files.
         """
 
         logging.info("Building request(s), downloading and averaging "
@@ -822,12 +881,19 @@ class AWSDownloader(ThreadedDownloader):
     def _single_api_download(self,
                             args: list,
                              ) -> list:
-        """Implements a single download from CDS API
+        """
+        Perform a single-process download batch from AWS based on variable and date ranges.
 
         Args:
-            args: A list of tuples containing (`var_config`, `req_dates`)
+            args: A list of tuples of (var_config, req_dates) for download.
+
+        Returns:
+            List of paths to successfully downloaded files.
+
+        Raises:
+            DownloaderError: If an unsupported frequency is encountered.
+            ValueError: If pressure levels are used with an unsupported dataset.
         """
-        # logging.debug("Processing {} dates for {}".format(len(req_dates), var_config))
         # TODO: Add monthly request handling
         #       for AWS data, this is not currently supported
         #       as the data is not available in monthly files
@@ -848,6 +914,7 @@ class AWSDownloader(ThreadedDownloader):
         downloaded_paths = []
         for var_levels in args:
             var_config, req_dates = var_levels
+            logging.debug("Processing {} dates for {}".format(len(req_dates), var_config))
             start_date = req_dates[0]
             end_date = req_dates[-1]
 
