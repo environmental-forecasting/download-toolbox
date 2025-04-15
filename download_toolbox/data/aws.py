@@ -98,8 +98,9 @@ class AWSDownloader(ThreadedDownloader):
                  *args,
                  start_date: object,
                  end_date: object,
-                 compress: int = 0,
+                 delete_cache: bool = False,
                  cache_only: bool = False,
+                 compress: int = 0,
                  **kwargs):
         """
         Initialise the AWSDownloader instance.
@@ -109,10 +110,11 @@ class AWSDownloader(ThreadedDownloader):
             *args: Additional positional arguments to pass to the base class.
             start_date: Start date for the data to download.
             end_date: End date for the data to download.
+            delete_cache: If `True`, delete the cache after download.
+            cache_only: If `True`, only download files to cache and return.
             compress: Compression level for saved NetCDF files.
                       0 or `None` for no compression.
                       (Defaults to 0. ).
-            cache_only: If `True`, only download files to cache and return.
             **kwargs: Additional keyword arguments passed to the base class.
 
         Raises:
@@ -143,8 +145,9 @@ class AWSDownloader(ThreadedDownloader):
         self.download_method = self._single_api_download
         self.product_type_map = self.__product_type_map()
         self.dataset_map = self.__dataset_map()
-        self.compress = compress
+        self.delete_cache = delete_cache
         self.cache_only = cache_only
+        self.compress = compress
 
     @staticmethod
     def __product_type_map() -> dict:
@@ -424,6 +427,7 @@ class AWSDownloader(ThreadedDownloader):
 
         # Loop through different pressure levels
         downloaded_paths = []
+        downloaded_files = []
         for var_levels in args:
             var_config, req_dates = var_levels
             logging.debug("Processing {} dates for {}".format(len(req_dates), var_config))
@@ -475,6 +479,7 @@ class AWSDownloader(ThreadedDownloader):
                 cached_file = os.path.join(temp_download_path, os.path.basename(filtered_file))
                 s3_file_download(bucket_name, filtered_file, cached_file)
                 cached_files.append(cached_file)
+                downloaded_files.append(cached_file)
 
             try:
                 logging.info(f"Downloading data for {var_config.name}...")
@@ -532,6 +537,12 @@ class AWSDownloader(ThreadedDownloader):
 
             downloaded_paths.append(download_path)
 
+        # Delete cached files if requested
+        if self.delete_cache:
+            for cached_file in downloaded_files:
+                if os.path.exists(cached_file):
+                    os.remove(cached_file)
+
         return downloaded_paths
 
     def _single_download(self,
@@ -566,8 +577,9 @@ def main():
             dataset,
             start_date=start_date,
             end_date=end_date,
-            compress=args.compress,
+            delete_cache=args.delete_cache,
             cache_only=args.cache_only,
+            compress=args.compress,
             max_threads=args.workers,
             request_frequency=getattr(Frequency, args.output_group_by),
         )

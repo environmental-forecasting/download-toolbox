@@ -268,7 +268,7 @@ class CDSDownloadArgParser(DownloadArgParser):
 
 
 class AWSDownloadArgParser(DownloadArgParser):
-    """Arguments for AWS datasets (Stub)"""
+    """Arguments for AWS datasets"""
     def __init__(self,
                  *args,
                  **kwargs):
@@ -276,6 +276,10 @@ class AWSDownloadArgParser(DownloadArgParser):
 
 
     def add_aws_specs(self):
+        self.add_argument("--delete-cache",
+                          help="Delete raw source download cached files after saving output netCDFs",
+                          default=False,
+                          action=argparse.BooleanOptionalAction)
         self.add_argument("--cache-only",
                           help="Only download the source files into the filecache, do nothing else",
                           default=False,
