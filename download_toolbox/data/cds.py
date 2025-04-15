@@ -13,7 +13,7 @@ import pandas as pd
 import xarray as xr
 
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 from functools import lru_cache
 from pprint import pformat
 from typing import Union
@@ -797,7 +797,7 @@ class AWSDownloader(ThreadedDownloader):
             logging.info("Creating thread pool with {} workers to service {} batches"
                          .format(max_workers, len(req_list)))
 
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
                 futures = []
 
                 for args in req_list:
@@ -945,12 +945,6 @@ class AWSDownloader(ThreadedDownloader):
             downloaded_paths.append(download_path)
 
         return downloaded_paths
-
-    def _single_download(self,
-                         var_config: object,
-                         req_dates: object) -> list:
-        logging.warning("You're not going to get data by calling this! "
-                        "Set download_method to an actual implementation.")
 
 
 def cds_main():
