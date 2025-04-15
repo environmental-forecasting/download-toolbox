@@ -1,7 +1,4 @@
-import boto3
-import concurrent
 import datetime as dt
-import fsspec
 import logging
 import re
 import requests
@@ -12,19 +9,13 @@ import cdsapi as cds
 import pandas as pd
 import xarray as xr
 
-from collections import defaultdict
-from concurrent.futures import ProcessPoolExecutor
-from functools import lru_cache
 from pprint import pformat
 from typing import Union
 from warnings import warn
 
-from botocore import UNSIGNED
-from botocore.config import Config
-
 from download_toolbox.cli import CDSDownloadArgParser, DownloadArgParser
 from download_toolbox.dataset import DatasetConfig
-from download_toolbox.data.utils import batch_requested_dates, xr_save_netcdf
+from download_toolbox.data.utils import xr_save_netcdf
 from download_toolbox.download import ThreadedDownloader, DownloaderError
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
