@@ -8,14 +8,13 @@ from concurrent.futures import ProcessPoolExecutor
 from functools import lru_cache
 
 import boto3
-import fsspec
 import xarray as xr
 from botocore import UNSIGNED
 from botocore.config import Config
 
 from download_toolbox.cli import AWSDownloadArgParser
 from download_toolbox.data.cds import CDSDatasetConfig
-from download_toolbox.data.utils import batch_requested_dates, xr_save_netcdf
+from download_toolbox.data.utils import batch_requested_dates, s3_file_download, xr_save_netcdf
 from download_toolbox.dataset import DatasetConfig
 from download_toolbox.download import DownloaderError, ThreadedDownloader
 from download_toolbox.location import Location
@@ -323,7 +322,7 @@ class AWSDownloader(ThreadedDownloader):
                 if not match:
                     continue
                 grib_table, parameter_id, ecmwf_short_name = match.group(1).split("_")
-                matching_files[cmip6_variable].append(f"s3://{bucket_name}/" + nc_file_path)
+                matching_files[cmip6_variable].append(nc_file_path)
             # Move to the next month (even if no. of days less than 31 days)
             current += dt.timedelta(days=32)
             current = current.replace(day=1)
@@ -392,6 +391,7 @@ class AWSDownloader(ThreadedDownloader):
 
         logging.info("{} files downloaded".format(len(self._files_downloaded)))
 
+
     def _single_api_download(self,
                             args: list,
                              ) -> list:
@@ -421,8 +421,6 @@ class AWSDownloader(ThreadedDownloader):
 
         # Extract root_path from dataset config
         temp_download_path = os.path.join(self.dataset._root_path, "cache")
-        fs = fsspec.filesystem("filecache", target_protocol="s3", target_options={"anon": True},
-                                cache_storage=temp_download_path)
 
         # Loop through different pressure levels
         downloaded_paths = []
@@ -472,12 +470,18 @@ class AWSDownloader(ThreadedDownloader):
             os.makedirs(os.path.dirname(temp_download_path), exist_ok=True)
             os.makedirs(os.path.dirname(download_path), exist_ok=True)
 
+            cached_files = []
+            for filtered_file in filtered_files[cmip6_variable_code]:
+                cached_file = os.path.join(temp_download_path, os.path.basename(filtered_file))
+                s3_file_download(bucket_name, filtered_file, cached_file)
+                cached_files.append(cached_file)
+
             try:
                 logging.info(f"Downloading data for {var_config.name}...")
                 logging.debug(f"Request file:\n{filtered_files[cmip6_variable_code]}")
 
                 ds = xr.open_mfdataset(
-                    [fs.open(filtered_file, mode="rb") for filtered_file in filtered_files[cmip6_variable_code]],
+                    cached_files,
                     combine="by_coords",
                     engine="h5netcdf",
                     parallel=True,
