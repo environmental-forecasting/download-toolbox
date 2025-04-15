@@ -874,6 +874,11 @@ class AWSDownloader(ThreadedDownloader):
                 prefix = f"e5.oper.{product_code}.{dataset_code}/"
 
             level = var_config.level
+            if level and dataset != "pressure-level":
+                raise ValueError(f"Level `{level}` is not supported for `{dataset}` dataset type, "
+                                    "this is a surface or near-surface variable"
+                )
+
             filtered_files = self.__list_matching_files(prefix, start_dt, end_dt,
                                 cmip6_variable_code, ecmwf_variable_code, bucket_name,
                                 multiple_levels=True if level else False)
