@@ -100,6 +100,7 @@ class AWSDownloader(ThreadedDownloader):
                  start_date: object,
                  end_date: object,
                  compress: int = 0,
+                 cache_only: bool = False,
                  **kwargs):
         """
         Initialise the AWSDownloader instance.
@@ -112,6 +113,7 @@ class AWSDownloader(ThreadedDownloader):
             compress: Compression level for saved NetCDF files.
                       0 or `None` for no compression.
                       (Defaults to 0. ).
+            cache_only: If `True`, only download files to cache and return.
             **kwargs: Additional keyword arguments passed to the base class.
 
         Raises:
@@ -143,6 +145,7 @@ class AWSDownloader(ThreadedDownloader):
         self.product_type_map = self.__product_type_map()
         self.dataset_map = self.__dataset_map()
         self.compress = compress
+        self.cache_only = cache_only
 
     @staticmethod
     def __product_type_map() -> dict:
@@ -480,10 +483,13 @@ class AWSDownloader(ThreadedDownloader):
                     parallel=True,
                     chunks={},
                     )
+
+                if self.cache_only:
+                    continue
             except Exception as e:
                 logging.exception("{} not downloaded, look at the problem".format(temp_download_path))
                 self.missing_dates.extend(req_dates)
-                return []
+                continue
 
             # Extract pressure level
             if "level" in ds.dims:
@@ -557,6 +563,7 @@ def main():
             start_date=start_date,
             end_date=end_date,
             compress=args.compress,
+            cache_only=args.cache_only,
             max_threads=args.workers,
             request_frequency=getattr(Frequency, args.output_group_by),
         )
