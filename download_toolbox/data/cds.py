@@ -582,6 +582,7 @@ class AWSDownloader(ThreadedDownloader):
                  show_progress: bool = False,
                  start_date: object,
                  end_date: object,
+                 compress: Union[int, None] = None,
                  **kwargs):
         # Date ranges available from AWS data
         era5_start = dt.date(1940, 1, 1)
@@ -609,6 +610,7 @@ class AWSDownloader(ThreadedDownloader):
         self.download_method = self._single_api_download
         self.product_type_map = self.__product_type_map()
         self.dataset_map = self.__dataset_map()
+        self.compress = compress
 
     @staticmethod
     def __product_type_map() -> dict:
@@ -932,7 +934,7 @@ class AWSDownloader(ThreadedDownloader):
             da = getattr(ds_region.rename(rename_vars), var_name)
 
             logging.info("Saving corrected ERA5 file to {}".format(download_path))
-            da.to_netcdf(download_path)
+            xr_save_netcdf(da, download_path, complevel=self.compress)
             ds.close()
 
             downloaded_paths.append(download_path)
@@ -1029,7 +1031,7 @@ def era5_main():
         )
 
 def aws_main():
-    args = AWSDownloadArgParser().add_var_specs().add_workers().parse_args()
+    args = AWSDownloadArgParser().add_var_specs().add_aws_specs().add_workers().parse_args()
 
     logging.info("AWS Data Downloading")
 
@@ -1055,6 +1057,7 @@ def aws_main():
             dataset,
             start_date=start_date,
             end_date=end_date,
+            compress=args.compress,
             max_threads=args.workers,
             request_frequency=getattr(Frequency, args.output_group_by),
         )
