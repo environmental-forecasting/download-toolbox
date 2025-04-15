@@ -240,6 +240,13 @@ class CDSDownloadArgParser(DownloadArgParser):
                           help="Comma separated list of times for the dataset ('00:00,01:00'...), or 'all' for all 24 hours",
                           type=csv_arg,
                           default=[])
+
+        # TODO: Pull this to constructor and update other downloaders
+        self.add_argument("--compress",
+                          help="Provide an integer from 1-9 (low to high) on how much to compress the output netCDF",
+                          default=None,
+                          type=int)
+
         return self
 
     def add_derived_specs(self):
