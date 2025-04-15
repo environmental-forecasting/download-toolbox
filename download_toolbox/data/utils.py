@@ -86,7 +86,7 @@ def merge_files(new_datafile: object,
         os.unlink(moved_new_datafile)
 
 
-def xr_save_netcdf(da: xr.DataArray, file_path: str, complevel: Union[int, None] = None) -> None:
+def xr_save_netcdf(da: xr.DataArray, file_path: str, complevel: int = 0) -> None:
     """
     Save xarray Dataarray to netCDF file with optional compression.
 
@@ -94,7 +94,7 @@ def xr_save_netcdf(da: xr.DataArray, file_path: str, complevel: Union[int, None]
         da: The xarray dataarray to be output to netCDF.
         file_path: Path to save the netCDF file.
         complevel (optional): Level of compression to apply.
-                              Defaults to None.
+                              Defaults to 0.
     """
     if complevel:
         compression = dict(zlib=True, complevel=int(complevel))
@@ -102,5 +102,6 @@ def xr_save_netcdf(da: xr.DataArray, file_path: str, complevel: Union[int, None]
         coords_encoding = {coord: compression for coord in da.coords}
         da.to_netcdf(file_path, mode="w", encoding=var_encoding | coords_encoding)
     else:
-        da.to_netcdf(file_path)
-
+        var_encoding = {da.name: {}}
+        coords_encoding = {coord: {} for coord in da.coords}
+        da.to_netcdf(file_path, mode="w", encoding=var_encoding | coords_encoding)
