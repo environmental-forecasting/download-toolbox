@@ -82,6 +82,7 @@ class ERA5DatasetConfig(CDSDatasetConfig):
 
 class AWSDatasetConfig(DatasetConfig):
     # Ref: https://confluence.ecmwf.int/display/CKB/ERA5%3A+data+documentation
+    # Map of CMIP6 variable names to ECMWF Grib parameter names
     CMIP6_MAP = {
         "tas":  {"id": 167, "short_name": "2t",           # Near-surface air temperature (CMIP6: tas, ECMWF ID: 167)
                 "product_type": "reanalysis", "dataset": "surface-level"},
@@ -579,12 +580,6 @@ class AWSDownloader(ThreadedDownloader):
                  show_progress: bool = False,
                  start_date: object,
                  end_date: object,
-                 dataset_name: Union[str, None] = None,
-                 product_type: Union[str, None] = None,
-                 time: Union[list, None] = None,
-                 daily_statistic: str = "daily_mean",
-                 time_zone: str = "utc+00:00",
-                 derived_frequency: str = "1_hourly",
                  **kwargs):
         # Date ranges available from AWS data
         era5_start = dt.date(1940, 1, 1)
@@ -608,14 +603,6 @@ class AWSDownloader(ThreadedDownloader):
                          start_date=start_date,
                          end_date=end_date,
                          **kwargs)
-
-        self.dataset_name = dataset_name
-        self.product_type = product_type
-        self.time = time
-        # Variables for derived daily statistics
-        self.daily_statistic = daily_statistic
-        self.time_zone = time_zone
-        self.derived_frequency = derived_frequency
 
         self.download_method = self._single_api_download
         self.product_type_map = self.__product_type_map()
@@ -723,7 +710,7 @@ class AWSDownloader(ThreadedDownloader):
 
     @staticmethod
     @lru_cache
-    def __list_matching_files(prefix, start_date, end_date, cmip6_variable, ecmwf_variable, bucket_name):
+    def __list_matching_files(prefix, start_date, end_date, cmip6_variable, ecmwf_variable, bucket_name, multiple_levels: bool):
         s3 = boto3.resource("s3", config=Config(signature_version=UNSIGNED))
         bucket = s3.Bucket(bucket_name)
         matching_files = defaultdict(list)
@@ -746,8 +733,17 @@ class AWSDownloader(ThreadedDownloader):
                     file_end_date = dt.datetime.strptime(file_end_date, "%Y%m%d%H")
                 except ValueError:
                     continue
-                if not (start_date <= file_start_date <= end_date):
-                    continue
+
+                if multiple_levels:
+                    # Stores variables with multiple levels in separate daily files
+                    # e5.oper.an.pl
+                    if not (start_date <= file_start_date <= end_date):
+                        continue
+                else:
+                    # Stores surface variables in separate monthly files
+                    # e5.oper.an.sfc
+                    if not (start_date <= end_date):
+                        continue
                 # Filter by parameter
                 pattern = rf"\.(\d+_\d+_{ecmwf_variable})\." # Get the parameter details section of filename
                 match = re.search(pattern, nc_file_path)
@@ -821,8 +817,6 @@ class AWSDownloader(ThreadedDownloader):
 
     def _single_api_download(self,
                             args: list,
-                            #  var_config_list: list[object],
-                            #  req_dates_list: list[object],
                              ) -> list:
         """Implements a single download from CDS API
 
@@ -840,18 +834,6 @@ class AWSDownloader(ThreadedDownloader):
         bucket_name = "nsf-ncar-era5"
         product_type_map = self.__product_type_map()
         dataset_map = self.__dataset_map()
-
-        product_code = product_type_map[self.product_type]["short-code"]
-        dataset_code = dataset_map[self.dataset_name]["short-code"]
-
-        logging.info(f"Selected ERA5 product type: {self.product_type} ({product_code})")
-        logging.info(f"Selected ERA5 dataset type: {self.dataset_name} ({dataset_code})")
-
-        # Parse prefix
-        if product_code == "invariant":
-            prefix = f"e5.oper.{product_code}/"
-        else:
-            prefix = f"e5.oper.{product_code}.{dataset_code}/"
 
         # Extract root_path from dataset config
         temp_download_path = os.path.join(self.dataset._root_path, "cache")
@@ -871,14 +853,35 @@ class AWSDownloader(ThreadedDownloader):
             # Retrieve filtered file list
             cmip6_variable_code = var_config.prefix
             ecmwf_variable_code = self.dataset.cmip6_map[cmip6_variable_code]["short_name"]
+
+            product = self.dataset.cmip6_map[cmip6_variable_code]["product_type"]
+            dataset = self.dataset.cmip6_map[cmip6_variable_code]["dataset"]
+
+            product_code = product_type_map[product]["short-code"]
+            dataset_code = dataset_map[dataset]["short-code"]
+
+            logging.info(f"Selected ERA5 product type: {product_code}")
+            logging.info(f"Selected ERA5 dataset type: {dataset_code}")
+
+            # Parse prefix
+            if product_code == "invariant":
+                prefix = f"e5.oper.{product_code}/"
+            else:
+                prefix = f"e5.oper.{product_code}.{dataset_code}/"
+
+            level = var_config.level
             filtered_files = self.__list_matching_files(prefix, start_dt, end_dt,
-                                cmip6_variable_code, ecmwf_variable_code, bucket_name)
+                                cmip6_variable_code, ecmwf_variable_code, bucket_name,
+                                multiple_levels=True if level else False)
+            logging.debug(f"Files to download:\n\t{'\n\t'.join(filtered_files[cmip6_variable_code])}")
 
             download_path = os.path.join(var_config.root_path,
                                         self.dataset.location.name,
                                         os.path.basename(self.dataset.var_filepath(var_config, req_dates)))
+
             os.makedirs(os.path.dirname(temp_download_path), exist_ok=True)
             os.makedirs(os.path.dirname(download_path), exist_ok=True)
+
             try:
                 logging.info(f"Downloading data for {var_config.name}...")
                 logging.debug(f"Request file:\n{filtered_files[cmip6_variable_code]}")
@@ -890,7 +893,6 @@ class AWSDownloader(ThreadedDownloader):
                     parallel=True,
                     chunks={},
                     )
-
             except Exception as e:
                 logging.exception("{} not downloaded, look at the problem".format(temp_download_path))
                 self.missing_dates.extend(req_dates)
@@ -899,10 +901,10 @@ class AWSDownloader(ThreadedDownloader):
             # Extract pressure level
             if "level" in ds.dims:
                 # Clearly have multiple pressure levels
-                ds = ds.sel(level=var_config.level).drop_vars("level")
+                ds = ds.sel(level=level).drop_vars("level")
             else:
                 # Surface level data
-                ds = ds.sel(time=slice(start_dt, end_dt))
+                ds = ds.sel(time=slice(start_dt, end_dt + dt.timedelta(hours=23)))
 
             # Roll the data to have the 0 degree longitude at the center
             ds.coords["longitude"] = (ds.coords["longitude"] + 180) % 360 - 180
@@ -1024,7 +1026,7 @@ def era5_main():
         )
 
 def aws_main():
-    args = AWSDownloadArgParser().add_var_specs().add_aws_specs().add_derived_specs().add_workers().parse_args()
+    args = AWSDownloadArgParser().add_var_specs().add_workers().parse_args()
 
     logging.info("AWS Data Downloading")
 
@@ -1052,12 +1054,6 @@ def aws_main():
             end_date=end_date,
             max_threads=args.workers,
             request_frequency=getattr(Frequency, args.output_group_by),
-            dataset_name=args.dataset,
-            product_type=args.product_type,
-            time=args.time,
-            daily_statistic=args.daily_statistic,
-            time_zone=args.time_zone,
-            derived_frequency=args.derived_frequency
         )
         aws.download()
 
