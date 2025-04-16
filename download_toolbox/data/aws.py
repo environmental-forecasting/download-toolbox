@@ -11,6 +11,7 @@ import boto3
 import xarray as xr
 from botocore import UNSIGNED
 from botocore.config import Config
+from functools import partial
 
 from download_toolbox.cli import AWSDownloadArgParser
 from download_toolbox.data.cds import CDSDatasetConfig
@@ -394,10 +395,56 @@ class AWSDownloader(ThreadedDownloader):
 
         logging.info("{} files downloaded".format(len(self._files_downloaded)))
 
+    @staticmethod
+    def _preprocess(ds: xr.Dataset,
+                    start_dt: dt.datetime,
+                    end_dt: dt.datetime,
+                    level: int,
+                    bounds: list[int],
+                    ) -> xr.Dataset:
+        """
+        Preprocess individual xarray datasets before combining.
+
+        This method performs the following preprocessing steps:
+        - Selects the appropriate pressure level (if available).
+        - Filters data based on the given time range.
+        - Rolls the longitude coordinate to center the 0° longitude.
+        - Extracts a specific geographical region based on the provided latitude and longitude bounds.
+
+        Args:
+            ds: Dataset to be processed.
+            start_dt: The start datetime for the time range to filter.
+            end_dt: The end datetime for the time range to filter.
+            level: The pressure level to select if multiple levels are available.
+            bounds: A list containing the bounds for the region to extract,
+                    in the order [max_lat, min_lon, min_lat, max_lon].
+
+        Returns:
+            Processed Dataset with specified region and time range.
+        """
+        # Extract pressure level
+        if "level" in ds.dims:
+            # Clearly have multiple pressure levels
+            ds = ds.sel(level=level).drop_vars("level")
+        else:
+            # Surface level data
+            ds = ds.sel(time=slice(start_dt, end_dt + dt.timedelta(hours=23)))
+
+        # Roll the data to have the 0 degree longitude at the center
+        ds.coords["longitude"] = (ds.coords["longitude"] + 180) % 360 - 180
+        ds = ds.sortby(ds.longitude)
+
+        # Extract region
+        max_lat, min_lon, min_lat, max_lon = bounds
+        lon_mask = (ds.longitude <= max_lon) | (ds.longitude >= min_lon)
+        lat_mask = (ds.latitude <= max_lat) & (ds.latitude >= min_lat)
+        ds_region = ds.sel(longitude=lon_mask, latitude=lat_mask)
+
+        return ds_region
 
     def _single_api_download(self,
                             args: list,
-                             ) -> list:
+                            ) -> list:
         """
         Perform a single-process download batch from AWS based on variable and date ranges.
 
@@ -481,6 +528,13 @@ class AWSDownloader(ThreadedDownloader):
                 cached_files.append(cached_file)
                 downloaded_files.append(cached_file)
 
+            dataset_preprocess = partial(self._preprocess,
+                                               start_dt=start_dt,
+                                               end_dt=end_dt,
+                                               level=level,
+                                               bounds=self.dataset.location.bounds,
+                                               )
+
             try:
                 logging.info(f"Downloading data for {var_config.name}...")
                 logging.debug(f"Request file:\n{filtered_files[cmip6_variable_code]}")
@@ -489,6 +543,7 @@ class AWSDownloader(ThreadedDownloader):
                     cached_files,
                     combine="by_coords",
                     engine="h5netcdf",
+                    preprocess=dataset_preprocess,
                     parallel=True,
                     chunks={},
                     )
@@ -500,36 +555,18 @@ class AWSDownloader(ThreadedDownloader):
                 self.missing_dates.extend(req_dates)
                 continue
 
-            # Extract pressure level
-            if "level" in ds.dims:
-                # Clearly have multiple pressure levels
-                ds = ds.sel(level=level).drop_vars("level")
-            else:
-                # Surface level data
-                ds = ds.sel(time=slice(start_dt, end_dt + dt.timedelta(hours=23)))
-
-            # Roll the data to have the 0 degree longitude at the center
-            ds.coords["longitude"] = (ds.coords["longitude"] + 180) % 360 - 180
-            ds = ds.sortby(ds.longitude)
-
-            # Extract region
-            max_lat, min_lon, min_lat, max_lon = self.dataset.location.bounds
-            ds_region = ds.sel(longitude=(ds.longitude <= max_lon) | (ds.longitude >= min_lon),
-                            latitude=(ds.latitude <= max_lat) & (ds.latitude >= min_lat))
-
             # Figure out the data variable name.
             # It should have the following three dimensions by this point:
             expected_dims = ["time", "latitude", "longitude"]
-            for var in ds_region.data_vars:
-                var_dims = ds_region[var].dims
+            for var in ds.data_vars:
+                var_dims = ds[var].dims
                 if all([dim in var_dims for dim in expected_dims]):
                     src_var_name = var
+                    break
 
             var_name = var_config.name
-
-            # Rename variable name for consistency
             rename_vars = {src_var_name: var_name}
-            da = getattr(ds_region.rename(rename_vars), var_name)
+            da = getattr(ds.rename(rename_vars), var_name)
 
             logging.info("Saving corrected ERA5 file to {}".format(download_path))
             xr_save_netcdf(da, download_path, complevel=self.compress)
