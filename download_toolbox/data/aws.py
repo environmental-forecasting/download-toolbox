@@ -430,10 +430,6 @@ class AWSDownloader(ThreadedDownloader):
             # Surface level data
             ds = ds.sel(time=slice(start_dt, end_dt + dt.timedelta(hours=23)))
 
-        # Roll the data to have the 0 degree longitude at the center
-        ds.coords["longitude"] = (ds.coords["longitude"] + 180) % 360 - 180
-        ds = ds.sortby(ds.longitude)
-
         # Extract region
         max_lat, min_lon, min_lat, max_lon = bounds
         lon_mask = (ds.longitude <= max_lon) | (ds.longitude >= min_lon)
@@ -541,11 +537,13 @@ class AWSDownloader(ThreadedDownloader):
 
                 ds = xr.open_mfdataset(
                     cached_files,
+                    data_vars="minimal",
+                    coords="minimal",
                     combine="by_coords",
                     engine="h5netcdf",
                     preprocess=dataset_preprocess,
                     parallel=True,
-                    chunks={},
+                    chunks={"time": 24},
                     )
 
                 if self.cache_only:
@@ -554,6 +552,10 @@ class AWSDownloader(ThreadedDownloader):
                 logging.exception("{} not downloaded, look at the problem".format(temp_download_path))
                 self.missing_dates.extend(req_dates)
                 continue
+
+            # Roll the data to have the 0 degree longitude at the center
+            ds.coords["longitude"] = (ds.coords["longitude"] + 180) % 360 - 180
+            ds = ds.sortby(ds.longitude)
 
             # Figure out the data variable name.
             # It should have the following three dimensions by this point:
