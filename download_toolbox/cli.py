@@ -266,3 +266,20 @@ class CDSDownloadArgParser(DownloadArgParser):
 
         return self
 
+
+class AWSDownloadArgParser(DownloadArgParser):
+    """Arguments for AWS datasets (Stub)"""
+    def __init__(self,
+                 *args,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+
+
+    def add_aws_specs(self):
+        # TODO: Pull this to constructor and update other downloaders
+        self.add_argument("--compress",
+                          help="Provide an integer from 1-9 (low to high) on how much to compress the output netCDF",
+                          default=None,
+                          type=int)
+
+        return self

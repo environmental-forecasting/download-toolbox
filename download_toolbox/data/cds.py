@@ -13,9 +13,9 @@ from pprint import pformat
 from typing import Union
 from warnings import warn
 
-from download_toolbox.dataset import DatasetConfig
-from download_toolbox.data.utils import batch_requested_dates, xr_save_netcdf
 from download_toolbox.cli import CDSDownloadArgParser, DownloadArgParser
+from download_toolbox.dataset import DatasetConfig
+from download_toolbox.data.utils import xr_save_netcdf
 from download_toolbox.download import ThreadedDownloader, DownloaderError
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
