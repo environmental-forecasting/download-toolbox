@@ -1,3 +1,4 @@
+import boto3
 import collections
 import logging
 import os
@@ -5,6 +6,8 @@ import os
 import pandas as pd
 import xarray as xr
 
+from botocore import UNSIGNED
+from botocore.config import Config
 from typing import Union
 
 
@@ -84,6 +87,43 @@ def merge_files(new_datafile: object,
         new_ds.to_netcdf(new_datafile)
         os.unlink(other_datafile)
         os.unlink(moved_new_datafile)
+
+
+def s3_file_download(bucket_name: str, key: str, filename: str) -> None:
+    """
+    Download a file from S3 bucket to local storage.
+
+    If the file already exists and matches the expected size, skip download.
+    If the file exists but is incomplete, re-download it.
+
+    Args:
+        bucket_name: Name of the S3 bucket.
+        key: Key of the file in the S3 bucket.
+        filename: Local path to save the downloaded file.
+    """
+    s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
+
+    # Get file size from S3 bucket
+    try:
+        metadata = s3.head_object(Bucket=bucket_name, Key=key)
+        s3_file_size = metadata['ContentLength']
+    except Exception as e:
+        logging.error(f"Error getting metadata: {e}")
+        return
+
+    # Check if local file exists and matches the expected size
+    if os.path.exists(filename):
+        local_file_size = os.path.getsize(filename)
+        if local_file_size == s3_file_size:
+            logging.info(f"File already downloaded: {filename}")
+            return
+        else:
+            logging.info(f"Incomplete file found (local: {local_file_size}, remote: {s3_file_size}). Re-downloading...")
+
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    with open(filename, "wb") as f:
+        s3.download_fileobj(bucket_name, key, f)
+    logging.info(f"Download complete: {filename}")
 
 
 def xr_save_netcdf(da: xr.DataArray, file_path: str, complevel: int = 0) -> None:

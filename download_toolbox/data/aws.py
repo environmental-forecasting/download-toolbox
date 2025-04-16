@@ -8,14 +8,14 @@ from concurrent.futures import ProcessPoolExecutor
 from functools import lru_cache
 
 import boto3
-import fsspec
 import xarray as xr
 from botocore import UNSIGNED
 from botocore.config import Config
+from functools import partial
 
 from download_toolbox.cli import AWSDownloadArgParser
 from download_toolbox.data.cds import CDSDatasetConfig
-from download_toolbox.data.utils import batch_requested_dates, xr_save_netcdf
+from download_toolbox.data.utils import batch_requested_dates, s3_file_download, xr_save_netcdf
 from download_toolbox.dataset import DatasetConfig
 from download_toolbox.download import DownloaderError, ThreadedDownloader
 from download_toolbox.location import Location
@@ -99,6 +99,8 @@ class AWSDownloader(ThreadedDownloader):
                  *args,
                  start_date: object,
                  end_date: object,
+                 delete_cache: bool = False,
+                 cache_only: bool = False,
                  compress: int = 0,
                  **kwargs):
         """
@@ -109,6 +111,8 @@ class AWSDownloader(ThreadedDownloader):
             *args: Additional positional arguments to pass to the base class.
             start_date: Start date for the data to download.
             end_date: End date for the data to download.
+            delete_cache: If `True`, delete the cache after download.
+            cache_only: If `True`, only download files to cache and return.
             compress: Compression level for saved NetCDF files.
                       0 or `None` for no compression.
                       (Defaults to 0. ).
@@ -142,6 +146,8 @@ class AWSDownloader(ThreadedDownloader):
         self.download_method = self._single_api_download
         self.product_type_map = self.__product_type_map()
         self.dataset_map = self.__dataset_map()
+        self.delete_cache = delete_cache
+        self.cache_only = cache_only
         self.compress = compress
 
     @staticmethod
@@ -320,7 +326,7 @@ class AWSDownloader(ThreadedDownloader):
                 if not match:
                     continue
                 grib_table, parameter_id, ecmwf_short_name = match.group(1).split("_")
-                matching_files[cmip6_variable].append(f"s3://{bucket_name}/" + nc_file_path)
+                matching_files[cmip6_variable].append(nc_file_path)
             # Move to the next month (even if no. of days less than 31 days)
             current += dt.timedelta(days=32)
             current = current.replace(day=1)
@@ -389,9 +395,52 @@ class AWSDownloader(ThreadedDownloader):
 
         logging.info("{} files downloaded".format(len(self._files_downloaded)))
 
+    @staticmethod
+    def _preprocess(ds: xr.Dataset,
+                    start_dt: dt.datetime,
+                    end_dt: dt.datetime,
+                    level: int,
+                    bounds: list[int],
+                    ) -> xr.Dataset:
+        """
+        Preprocess individual xarray datasets before combining.
+
+        This method performs the following preprocessing steps:
+        - Selects the appropriate pressure level (if available).
+        - Filters data based on the given time range.
+        - Rolls the longitude coordinate to center the 0° longitude.
+        - Extracts a specific geographical region based on the provided latitude and longitude bounds.
+
+        Args:
+            ds: Dataset to be processed.
+            start_dt: The start datetime for the time range to filter.
+            end_dt: The end datetime for the time range to filter.
+            level: The pressure level to select if multiple levels are available.
+            bounds: A list containing the bounds for the region to extract,
+                    in the order [max_lat, min_lon, min_lat, max_lon].
+
+        Returns:
+            Processed Dataset with specified region and time range.
+        """
+        # Extract pressure level
+        if "level" in ds.dims:
+            # Clearly have multiple pressure levels
+            ds = ds.sel(level=level).drop_vars("level")
+        else:
+            # Surface level data
+            ds = ds.sel(time=slice(start_dt, end_dt + dt.timedelta(hours=23)))
+
+        # Extract region
+        max_lat, min_lon, min_lat, max_lon = bounds
+        lon_mask = (ds.longitude <= max_lon) | (ds.longitude >= min_lon)
+        lat_mask = (ds.latitude <= max_lat) & (ds.latitude >= min_lat)
+        ds_region = ds.sel(longitude=lon_mask, latitude=lat_mask)
+
+        return ds_region
+
     def _single_api_download(self,
                             args: list,
-                             ) -> list:
+                            ) -> list:
         """
         Perform a single-process download batch from AWS based on variable and date ranges.
 
@@ -418,11 +467,10 @@ class AWSDownloader(ThreadedDownloader):
 
         # Extract root_path from dataset config
         temp_download_path = os.path.join(self.dataset._root_path, "cache")
-        fs = fsspec.filesystem("filecache", target_protocol="s3", target_options={"anon": True},
-                                cache_storage=temp_download_path)
 
         # Loop through different pressure levels
         downloaded_paths = []
+        downloaded_files = []
         for var_levels in args:
             var_config, req_dates = var_levels
             logging.debug("Processing {} dates for {}".format(len(req_dates), var_config))
@@ -469,58 +517,70 @@ class AWSDownloader(ThreadedDownloader):
             os.makedirs(os.path.dirname(temp_download_path), exist_ok=True)
             os.makedirs(os.path.dirname(download_path), exist_ok=True)
 
+            cached_files = []
+            for filtered_file in filtered_files[cmip6_variable_code]:
+                cached_file = os.path.join(temp_download_path, os.path.basename(filtered_file))
+                s3_file_download(bucket_name, filtered_file, cached_file)
+                cached_files.append(cached_file)
+                downloaded_files.append(cached_file)
+
+            dataset_preprocess = partial(self._preprocess,
+                                               start_dt=start_dt,
+                                               end_dt=end_dt,
+                                               level=level,
+                                               bounds=self.dataset.location.bounds,
+                                               )
+
             try:
                 logging.info(f"Downloading data for {var_config.name}...")
                 logging.debug(f"Request file:\n{filtered_files[cmip6_variable_code]}")
 
                 ds = xr.open_mfdataset(
-                    [fs.open(filtered_file, mode="rb") for filtered_file in filtered_files[cmip6_variable_code]],
+                    cached_files,
+                    data_vars="minimal",
+                    coords="minimal",
                     combine="by_coords",
                     engine="h5netcdf",
+                    preprocess=dataset_preprocess,
                     parallel=True,
-                    chunks={},
+                    chunks={"time": 24},
                     )
+
+                if self.cache_only:
+                    continue
             except Exception as e:
                 logging.exception("{} not downloaded, look at the problem".format(temp_download_path))
                 self.missing_dates.extend(req_dates)
-                return []
-
-            # Extract pressure level
-            if "level" in ds.dims:
-                # Clearly have multiple pressure levels
-                ds = ds.sel(level=level).drop_vars("level")
-            else:
-                # Surface level data
-                ds = ds.sel(time=slice(start_dt, end_dt + dt.timedelta(hours=23)))
+                continue
 
             # Roll the data to have the 0 degree longitude at the center
             ds.coords["longitude"] = (ds.coords["longitude"] + 180) % 360 - 180
             ds = ds.sortby(ds.longitude)
 
-            # Extract region
-            max_lat, min_lon, min_lat, max_lon = self.dataset.location.bounds
-            ds_region = ds.sel(longitude=(ds.longitude <= max_lon) | (ds.longitude >= min_lon),
-                            latitude=(ds.latitude <= max_lat) & (ds.latitude >= min_lat))
-
             # Figure out the data variable name.
             # It should have the following three dimensions by this point:
             expected_dims = ["time", "latitude", "longitude"]
-            for var in ds_region.data_vars:
-                var_dims = ds_region[var].dims
+            for var in ds.data_vars:
+                var_dims = ds[var].dims
                 if all([dim in var_dims for dim in expected_dims]):
                     src_var_name = var
+                    break
 
             var_name = var_config.name
-
-            # Rename variable name for consistency
             rename_vars = {src_var_name: var_name}
-            da = getattr(ds_region.rename(rename_vars), var_name)
+            da = getattr(ds.rename(rename_vars), var_name)
 
             logging.info("Saving corrected ERA5 file to {}".format(download_path))
             xr_save_netcdf(da, download_path, complevel=self.compress)
             ds.close()
 
             downloaded_paths.append(download_path)
+
+        # Delete cached files if requested
+        if self.delete_cache:
+            for cached_file in downloaded_files:
+                if os.path.exists(cached_file):
+                    os.remove(cached_file)
 
         return downloaded_paths
 
@@ -556,6 +616,8 @@ def main():
             dataset,
             start_date=start_date,
             end_date=end_date,
+            delete_cache=args.delete_cache,
+            cache_only=args.cache_only,
             compress=args.compress,
             max_threads=args.workers,
             request_frequency=getattr(Frequency, args.output_group_by),
