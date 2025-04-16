@@ -13,6 +13,7 @@ maintainers = [
   { email = "jambyr@bas.ac.uk" }
 ]
 dependencies = [
+	"boto3",
     "cdsapi",
     "cfgrib",
 	"dask[distributed]",
@@ -70,7 +71,6 @@ dev = [
   "build",
   "importlib_metadata",
   "pre-commit",
-  "boto3",
   "fsspec",
 ]
 
