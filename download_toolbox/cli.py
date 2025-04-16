@@ -120,6 +120,8 @@ class BaseArgParser(argparse.ArgumentParser):
         self._log_format = log_format
         self._suppress_logs = suppress_logs
 
+        # FIXME: this is not ubiquitously useful in preprocess-toolbox: ref channel adds
+        #   so there is a pattern failure having it at this level
         self.add_argument("-c", "--config-path",
                           dest="config",
                           help="Path at which to output the configuration when rendered")
