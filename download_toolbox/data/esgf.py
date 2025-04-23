@@ -199,8 +199,13 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
 
         logging.info("Querying ESGF for experiment {} for {}".format(" and ".join(self.dataset.experiments), var_config.name))
         query['experiment_id'] = ",".join(self.dataset.experiments)
+        node_results = None
 
-        node_results = self.esgf_search(**query)
+        try:
+            node_results = self.esgf_search(**query)
+        except requests.exceptions.HTTPError:
+            logging.error("HTTP error with collecting node results, clearing the cache")
+            self.esgf_search.cache_clear()
 
         if node_results is not None and len(node_results) > 0:
             logging.debug("Query: {}".format(query))
@@ -299,7 +304,8 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
 
         if os.path.exists(download_path):
             return [download_path]
-        return [None]
+
+        return None
 
     @lru_cache(1000)
     def esgf_search(self,
