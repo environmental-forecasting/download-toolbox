@@ -370,7 +370,7 @@ class ERA5Downloader(ThreadedDownloader):
             # TODO: assumption about the time of day!
             "time": ["12:00",],
             "format": "netcdf",
-            # TODO: explicit, but should be implicit
+            # TODO: explicit, but should be argument based or implict from location
             "grid": [0.25, 0.25],
             "area": self.dataset.location.bounds,
             "download_format": "unarchived"
@@ -382,37 +382,27 @@ class ERA5Downloader(ThreadedDownloader):
             retrieve_dict["pressure_level"] = [var_config.level]
         dataset = "reanalysis-era5-{}{}".format(level_id, "-monthly-means" if monthly_request else "")
 
-        # FIXME: this is quite shaky, not using at present
-        #    # _, date_end = get_era5_available_date_range(dataset)
-
-        #    # TODO: This updates to dates available for download, prevents
-        #    #       redundant downloads but, requires work to prevent
-        #    #       postprocess method from running if no downloaded file.
-        #    # req_dates = [date for date in req_dates if date <= date_end]
-        # END
-
         if not monthly_request:
             retrieve_dict["day"] = ["{:02d}".format(d) for d in range(1, 32)]
             # retrieve_dict["time"] = ["{:02d}:00".format(h) for h in range(0, 24)]
 
         if os.path.exists(temp_download_path):
-            raise DownloaderError("{} already exists, this shouldn't be the case, please consider altering the "
-                                  "time resolution of request to avoid downloaded data clashes".format(temp_download_path))
+            logging.warning("{} already exists but destination doesn't".format(temp_download_path))
+        else:
+            try:
+                logging.info("Downloading data for {}...".format(var_config.name))
+                logging.debug("Request dataset {} with:\n".format(pformat(retrieve_dict)))
+                self.client.retrieve(
+                    dataset,
+                    retrieve_dict,
+                    temp_download_path)
+                logging.info("Download completed: {}".format(temp_download_path))
 
-        try:
-            logging.info("Downloading data for {}...".format(var_config.name))
-            logging.debug("Request dataset {} with:\n".format(pformat(retrieve_dict)))
-            self.client.retrieve(
-                dataset,
-                retrieve_dict,
-                temp_download_path)
-            logging.info("Download completed: {}".format(temp_download_path))
-
-        # cdsapi uses raise Exception in many places, so having a catch-all is appropriate
-        except Exception as e:
-            logging.exception("{} not downloaded, look at the problem".format(temp_download_path))
-            self.missing_dates.extend(req_dates)
-            return []
+            # cdsapi uses raise Exception in many places, so having a catch-all is appropriate
+            except Exception as e:
+                logging.exception("{} not downloaded, look at the problem".format(temp_download_path))
+                self.missing_dates.extend(req_dates)
+                return []
 
         ds = xr.open_dataset(temp_download_path)
 
