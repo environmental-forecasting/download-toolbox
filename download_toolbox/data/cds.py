@@ -454,12 +454,14 @@ class ERA5Downloader(ThreadedDownloader):
         # The latest 3 months of data is ERA5T and may be subject to changes.
         # Data prior to this is from ERA5.
         # The new CDSAPI returns combined data when `reanalysis` is requested.
-        if 'expver' in ds.coords:
-            logging.warning("expver in coordinates, new cdsapi returns ERA5 and "
-                            "ERA5T combined, this needs further work: expver needs "
-                            "storing for later overwriting")
+        if 'expver' in da.coords:
+            logging.warning("Dropping expver in {} coordinates".format(download_path))
+            ## , new cdsapi returns ERA5 and "
+            #                "ERA5T combined, this needs further work: expver needs "
+            #                "storing for later overwriting"
             # Ref: https://confluence.ecmwf.int/pages/viewpage.action?pageId=173385064
             # da = da.sel(expver=1).combine_first(da.sel(expver=5))
+            da = da.drop_vars("expver")
         logging.info("Saving corrected ERA5 file to {}".format(download_path))
         da.to_netcdf(download_path)
         da.close()
