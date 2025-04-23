@@ -141,6 +141,7 @@ class BaseArgParser(argparse.ArgumentParser):
                    **kwargs):
         args = super().parse_args(*args, **kwargs)
 
+        # TODO: this is not necessarily ideal when running the argparser in notebooks
         loglevel = logging.DEBUG if args.verbose else logging.INFO
         logging.basicConfig(
             datefmt="%d-%m-%y %T",

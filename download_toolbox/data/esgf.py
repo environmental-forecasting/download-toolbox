@@ -244,6 +244,11 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
                                      self.dataset.location.name,
                                      os.path.basename(self.dataset.var_filepath(var_config, req_dates)))
 
+        if os.path.exists(download_path):
+            logging.warning(f"We have downloaded data without corresponding output, "
+                            f"so will skip the download: {download_path}")
+            return [download_path]
+
         logging.debug("\n".join(results))
 
         for node, grouped_results in node_grouped_results.items():
