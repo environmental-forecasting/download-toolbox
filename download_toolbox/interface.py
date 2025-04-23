@@ -12,6 +12,7 @@ from download_toolbox.time import Frequency
 from download_toolbox.utils import get_implementation
 
 from download_toolbox.data.amsr import AMSRDatasetConfig
+from download_toolbox.data.aws import AWSDatasetConfig
 from download_toolbox.data.cds import ERA5DatasetConfig
 from download_toolbox.data.esgf import CMIP6DatasetConfig
 from download_toolbox.data.osisaf import SICDatasetConfig
@@ -21,6 +22,7 @@ __all__ = [
     "DataCollection",
     "DatasetConfig",
     "AMSRDatasetConfig",
+    "AWSDatasetConfig",
     "ERA5DatasetConfig",
     "CMIP6DatasetConfig",
     "SICDatasetConfig",
