@@ -508,7 +508,10 @@ class AWSDownloader(ThreadedDownloader):
             filtered_files = self.__list_matching_files(prefix, start_dt, end_dt,
                                 cmip6_variable_code, ecmwf_variable_code, bucket_name,
                                 multiple_levels=True if level else False)
-            logging.debug(f"Files to download:\n\t{'\n\t'.join(filtered_files[cmip6_variable_code])}")
+            joined_files = "\n\t".join(filtered_files[cmip6_variable_code])
+            logging.debug(f"Files to download:\n\t{joined_files}")
+
+
 
             download_path = os.path.join(var_config.root_path,
                                         self.dataset.location.name,
