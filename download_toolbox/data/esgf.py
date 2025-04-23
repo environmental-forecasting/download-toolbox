@@ -203,8 +203,9 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
 
         try:
             node_results = self.esgf_search(**query)
-        except requests.exceptions.HTTPError:
-            logging.error("HTTP error with collecting node results, clearing the cache")
+        except requests.exceptions.HTTPError as e:
+            logging.error(f"HTTP error {e.response} with collecting node results, "
+                          f"clearing the cache and maybe try a different search node")
             self.esgf_search.cache_clear()
 
         if node_results is not None and len(node_results) > 0:
@@ -387,6 +388,7 @@ def main():
     args = DownloadArgParser().add_var_specs().add_workers().add_extra_args([
         (["--source"], dict(type=str, default="MRI-ESM2-0")),
         (["--member"], dict(type=str, default="r1i1p1f1")),
+        (("-n", "--search-node"), dict(type=str, default="https://esgf-node.llnl.gov/esg-search/search")),
         # (["--pyesgf"], dict(default=False, action="store_true")),
         (("-xs", "--exclude-server"),
          dict(default=[], nargs="*")),
@@ -423,6 +425,7 @@ def main():
             max_threads=args.workers,
             exclude_nodes=args.exclude_server,
             request_frequency=getattr(Frequency, args.output_group_by),
+            search_node=args.search_node,
         )
 
         logging.info("CMIP downloading: {} {}".format(args.source, args.member))
