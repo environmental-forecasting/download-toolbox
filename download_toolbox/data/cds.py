@@ -241,8 +241,7 @@ class CDSDownloader(ThreadedDownloader):
         elif len(var_list) > 1:
             raise ValueError(f"""Multiple variables found in data file!
                                  There should only be one variable.
-                                 {var_list}"""
-                            )
+                                 {var_list}""")
         src_var_name = var_list[0]
         var_name = var_config.name
 
@@ -357,6 +356,10 @@ class ERA5Downloader(ThreadedDownloader):
                                      self.dataset.location.name,
                                      os.path.basename(self.dataset.var_filepath(var_config, req_dates)))
         os.makedirs(os.path.dirname(download_path), exist_ok=True)
+
+        if os.path.exists(download_path):
+            logging.warning(f"We have a downloaded file available, skipping: {download_path}")
+            return [download_path]
 
         retrieve_dict = {
             "product_type": [product_type,],
