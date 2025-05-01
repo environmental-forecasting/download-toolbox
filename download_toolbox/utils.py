@@ -81,13 +81,12 @@ class DaskWrapper:
         self._workers = workers
         self._scheduler = scheduler
 
-    def dask_process(self,
-                     *args,
-                     method: callable,
-                     **kwargs):
+        self._cluster = None
+        self._client = None
+
+    def __enter__(self):
         """
 
-        :param method:
         """
         dashboard = "localhost:{}".format(self._dashboard_port)
 
@@ -96,9 +95,8 @@ class DaskWrapper:
             "distributed.comm.timeouts.connect": self._timeout,
             "distributed.comm.timeouts.tcp": self._timeout,
             # "scheduler": self._scheduler, # Fix to "single-threaded" for netCDF4 >=1.6.1 not thread-safe.
-        }
-        ):
-            cluster = LocalCluster(
+        }):
+            self._cluster = LocalCluster(
                 dashboard_address=dashboard,
                 n_workers=self._workers,
                 threads_per_worker=1,
@@ -106,11 +104,15 @@ class DaskWrapper:
             )
             logging.info("Dashboard at {}".format(dashboard))
 
-            with Client(cluster) as client:
-                logging.info("Using dask client {}".format(client))
-                ret = method(*args, **kwargs)
-        return ret
+            self._client = Client(self._cluster)
+            logging.info("Using dask client {}".format(self._client))
 
+        return self
+
+    def __exit__(self, *exc_details):
+        self._client.close()
+        self._client = None
+        # TODO: Leaving the cluster alive?
 
 class FTPClient(object):
     def __init__(self,

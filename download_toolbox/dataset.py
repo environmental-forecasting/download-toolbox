@@ -251,6 +251,7 @@ class DatasetConfig(DataCollection):
                                        concat_dim=None if combine_method == "by_coords" else "time",
                                        parallel=True,
                                        engine="h5netcdf",
+                                       lock=False,      # Attempt to avoid deadlocks, xarray GH#3961
                                        )
             except ValueError as e:
                 logging.exception("Could not open files {} with error".format(source_files))

@@ -6,7 +6,7 @@ import datetime as dt
 from download_toolbox.dataset import DatasetConfig, DataSetError
 from download_toolbox.cli import DownloadArgParser
 from download_toolbox.download import ThreadedDownloader, DownloaderError
-from download_toolbox.utils import HTTPClient, ClientError
+from download_toolbox.utils import HTTPClient, ClientError, DaskWrapper
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
 
@@ -110,7 +110,13 @@ def main():
             type=float,
             choices=[3.125, 6.25],
             default=6.25
-        ))]).parse_args()
+        )),
+        (["-dw", "--dask-workers"], dict(
+            type=int,
+            default=4,
+            help="Number of dask workers for saving files"
+        ))
+    ]).parse_args()
 
     logging.info("AMSR-SIC Data Downloading")
     location = Location(
@@ -136,11 +142,13 @@ def main():
             end_date=end_date,
         )
         sic.download()
-        dataset.save_data_for_config(
-            combine_method="nested",
-            # TODO: This should ideally be in IceNet? There is a bigger issue of naming to address (GH#10)
-            rename_var_list=dict(z="siconca"),
-            source_files=sic.files_downloaded,
-            time_dim_values=[date for date in sic.dates if date not in sic.missing_dates],
-            var_filter_list=var_remove_list
-        )
+
+        # TODO: DaskWrapper is a bit dirty, but works for overcoming some issues around processing speed
+        with DaskWrapper(workers=args.dask_workers):
+            dataset.save_data_for_config(
+                combine_method="nested",
+                # TODO: This should ideally be in IceNet? There is a bigger issue of naming to address (GH#10)
+                rename_var_list=dict(z="siconca"),
+                source_files=sic.files_downloaded,
+                time_dim_values=[date for date in sic.dates if date not in sic.missing_dates],
+                var_filter_list=var_remove_list)
