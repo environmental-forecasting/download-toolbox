@@ -133,8 +133,11 @@ class DatasetConfig(DataCollection):
 
             for src, dest in zip(old_files, new_files):
                 os.makedirs(os.path.dirname(dest), exist_ok=True)
-                logging.debug("Copying {} to {}".format(src, dest))
-                shutil.copy(src, dest)
+                if os.path.exists(src):
+                    logging.debug("Copying {} to {}".format(src, dest))
+                    shutil.copy(src, dest)
+                else:
+                    logging.warning("Encountered reference to non-existent data: {}".format(src))
 
             self.var_files[var_name] = new_files
 
