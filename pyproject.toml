@@ -73,6 +73,12 @@ dev = [
   "pre-commit",
   "fsspec",
 ]
+docs = [
+  "mkdocs",
+  "mkdocstrings[python]",
+  "markdown-include",
+  "mkdocs-material"
+]
 
 [project.urls]
 "Homepage" = "https://icenet.ai/"
