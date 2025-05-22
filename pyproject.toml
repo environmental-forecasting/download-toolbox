@@ -80,6 +80,11 @@ docs = [
   "mkdocs-material"
 ]
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["download_toolbox*"]
+exclude = ["download_toolbox.tests*"]
+
 [project.urls]
 "Homepage" = "https://icenet.ai/"
 "Source" = "https://github.com/antarctica/download-toolbox"
