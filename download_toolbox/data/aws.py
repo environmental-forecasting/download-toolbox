@@ -400,7 +400,7 @@ class AWSDownloader(ThreadedDownloader):
                     start_dt: dt.datetime,
                     end_dt: dt.datetime,
                     level: int,
-                    bounds: list[int],
+                    bounds: list,
                     ) -> xr.Dataset:
         """
         Preprocess individual xarray datasets before combining.
