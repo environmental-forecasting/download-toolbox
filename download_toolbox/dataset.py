@@ -129,7 +129,8 @@ class DatasetConfig(DataCollection):
 
         for var_name in self.var_files.keys():
             old_files = self.var_files[var_name]
-            new_files = [var_file.replace(old_path, self.path) for var_file in old_files]
+            new_files = [var_file.replace(old_path, self.path)
+                         for var_file in old_files if os.path.exists(var_file)]
 
             for src, dest in zip(old_files, new_files):
                 os.makedirs(os.path.dirname(dest), exist_ok=True)
