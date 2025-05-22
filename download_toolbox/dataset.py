@@ -248,10 +248,12 @@ class DatasetConfig(DataCollection):
                 logging.debug("Opening source files: {}".format(pformat(source_files)))
                 ds = xr.open_mfdataset(source_files,
                                        combine=combine_method,
-                                       concat_dim=None if combine_method == "by_coords" else "time",
+                                       coords="minimal",
+                                       compat="override",
+                                       concat_dim="time", # None if combine_method == "by_coords" else "time",
                                        parallel=True,
-                                       engine="h5netcdf",
-                                       lock=False,      # Attempt to avoid deadlocks, xarray GH#3961
+                                       engine="netcdf4",
+                                       lock=False,      # Attempt to avoid deadlocks, xarray GH#3961, also set HDF5_USE_FILE_LOCKING=FALSE if in trouble?
                                        )
             except ValueError as e:
                 logging.exception("Could not open files {} with error".format(source_files))
@@ -259,8 +261,9 @@ class DatasetConfig(DataCollection):
 
             if time_dim_values is not None:
                 time_dt_arr = [pd.Timestamp(d) for d in time_dim_values if d not in self._existing_dates]
-                logging.warning("Assigning time dimension with {} values".format(len(time_dt_arr)))
+                logging.warning("Assigning and chunking time dimension with {} values".format(len(time_dt_arr)))
                 ds = ds.assign(dict(time=time_dt_arr))
+                ds = ds.chunk(dict(time=1, y=1792, x=1216))
                 self._existing_dates.append([pd.to_datetime(d).date() for d in time_dt_arr])
         else:
             logging.warning("No data provided as data object or source files, not doing anything")
@@ -275,6 +278,8 @@ class DatasetConfig(DataCollection):
 
         # TODO: Reduce spatially to required location
         #  this will also need to set our shape details
+
+        logging.debug("Working with {}".format(ds))
 
         # Reduce temporally to required resolution
         # TODO: Note, https://github.com/pydata/xarray/issues/364 for Grouper functionality?
