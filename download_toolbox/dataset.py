@@ -100,8 +100,6 @@ class DatasetConfig(DataCollection):
             append = []
 
         data_var_path = os.path.join(self.path if not root else self.root_path, *[var, *append])
-        # logging.debug("Handling {}data var path: {}".
-        #               format("root " if root else "", data_var_path))
 
         if not os.path.exists(data_var_path):
             if not missing_error:
@@ -375,18 +373,6 @@ class DatasetConfig(DataCollection):
 
         return output_filepaths
 
-    #@property
-    #def config(self):
-    #    if self._config is None:
-    #        config_ident = ".".join(self.path_components)
-    #
-    #        logging.debug("Creating dataset configuration with {}".format(config_ident))
-    #        self._config = Configuration(
-    #            config_path=self.config.output_path if self.config.output_path is None else self.root_path,
-    #            config_type=self.config_type,
-    #            identifier=config_ident)
-    #    return self._config
-
     @property
     def frequency(self):
         return self._frequency
@@ -400,7 +386,6 @@ class DatasetConfig(DataCollection):
         for var_name, levels in zip(self._var_names, self._levels):
             for level in levels if levels is not None else [None]:
                 var_config = self.var_config(var_name, level)
-                # logging.debug("Returning configuration: {}".format(var_config))
                 yield var_config
 
     @property
