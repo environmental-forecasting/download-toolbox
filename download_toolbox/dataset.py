@@ -210,11 +210,11 @@ class DatasetConfig(DataCollection):
             var_names = [v.name for v in self.variables]
 
         logging.debug("Finding files for {}".format(", ".join(var_names)))
-        var_files = [var_filepaths
+        var_files = [var_filepath
                      for vn in var_names
-                     for var_filepaths in self.var_files[vn]]
+                     for var_filepath in self.var_files[vn]
+                     if os.path.exists(var_filepath)]
         logging.info("Got {} filenames to open dataset with!".format(len(var_files)))
-        logging.debug(pformat(var_files))
 
         # TODO: where's my parallel mfdataset please!?
         with dask.config.set(**{'array.slicing.split_large_chunks': True,
