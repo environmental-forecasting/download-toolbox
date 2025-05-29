@@ -77,7 +77,16 @@ docs = [
   "mkdocs",
   "mkdocstrings[python]",
   "markdown-include",
-  "mkdocs-material"
+  "mkdocs-material",
+  "mkdocs-autoapi",
+  "mkdocs-git-authors-plugin"
+]
+lint = [
+    "flake8"
+]
+tests = [
+    "pytest",
+    "pytest-cov"
 ]
 
 [tool.setuptools.packages.find]
