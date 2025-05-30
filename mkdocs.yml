@@ -4,6 +4,7 @@ theme:
   highlightjs: true
 nav:
   - Home: 'index.md'
+  - Downloaders: 'downloaders.md'
   - 'usage.md'
   - GitHub: 'https://github.com/environmental-forecasting/download-toolbox'
 plugins:
