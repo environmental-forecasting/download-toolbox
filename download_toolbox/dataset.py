@@ -43,6 +43,7 @@ class DatasetConfig(DataCollection):
 
     def __init__(self,
                  *,
+                 config_type: str = "dataset_config",
                  existing_dates: list = None,
                  frequency: object = Frequency.DAY,
                  levels: object = (),
@@ -55,7 +56,7 @@ class DatasetConfig(DataCollection):
                  var_files: dict = None,
                  var_names: object = (),
                  **kwargs) -> None:
-        super(DatasetConfig, self).__init__(config_type="dataset_config",
+        super(DatasetConfig, self).__init__(config_type=config_type,
                                             path_components=[frequency.name.lower(), location.name]
                                             if path_components is None else path_components,
                                             **kwargs)
