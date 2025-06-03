@@ -100,8 +100,6 @@ class DatasetConfig(DataCollection):
             append = []
 
         data_var_path = os.path.join(self.path if not root else self.root_path, *[var, *append])
-        # logging.debug("Handling {}data var path: {}".
-        #               format("root " if root else "", data_var_path))
 
         if not os.path.exists(data_var_path):
             if not missing_error:
@@ -129,12 +127,16 @@ class DatasetConfig(DataCollection):
 
         for var_name in self.var_files.keys():
             old_files = self.var_files[var_name]
-            new_files = [var_file.replace(old_path, self.path) for var_file in old_files]
+            new_files = [var_file.replace(old_path, self.path)
+                         for var_file in old_files if os.path.exists(var_file)]
 
             for src, dest in zip(old_files, new_files):
                 os.makedirs(os.path.dirname(dest), exist_ok=True)
-                logging.debug("Copying {} to {}".format(src, dest))
-                shutil.copy(src, dest)
+                if os.path.exists(src):
+                    logging.debug("Copying {} to {}".format(src, dest))
+                    shutil.copy(src, dest)
+                else:
+                    logging.warning("Encountered reference to non-existent data: {}".format(src))
 
             self.var_files[var_name] = new_files
 
@@ -208,11 +210,11 @@ class DatasetConfig(DataCollection):
             var_names = [v.name for v in self.variables]
 
         logging.debug("Finding files for {}".format(", ".join(var_names)))
-        var_files = [var_filepaths
+        var_files = [var_filepath
                      for vn in var_names
-                     for var_filepaths in self.var_files[vn]]
+                     for var_filepath in self.var_files[vn]
+                     if os.path.exists(var_filepath)]
         logging.info("Got {} filenames to open dataset with!".format(len(var_files)))
-        logging.debug(pformat(var_files))
 
         # TODO: where's my parallel mfdataset please!?
         with dask.config.set(**{'array.slicing.split_large_chunks': True,
@@ -371,18 +373,6 @@ class DatasetConfig(DataCollection):
 
         return output_filepaths
 
-    #@property
-    #def config(self):
-    #    if self._config is None:
-    #        config_ident = ".".join(self.path_components)
-    #
-    #        logging.debug("Creating dataset configuration with {}".format(config_ident))
-    #        self._config = Configuration(
-    #            config_path=self.config.output_path if self.config.output_path is None else self.root_path,
-    #            config_type=self.config_type,
-    #            identifier=config_ident)
-    #    return self._config
-
     @property
     def frequency(self):
         return self._frequency
@@ -396,7 +386,6 @@ class DatasetConfig(DataCollection):
         for var_name, levels in zip(self._var_names, self._levels):
             for level in levels if levels is not None else [None]:
                 var_config = self.var_config(var_name, level)
-                # logging.debug("Returning configuration: {}".format(var_config))
                 yield var_config
 
     @property
