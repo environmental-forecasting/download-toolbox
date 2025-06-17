@@ -4,36 +4,45 @@ theme:
   highlightjs: true
 nav:
   - Home: 'index.md'
+  - Downloaders: 'downloaders.md'
   - 'usage.md'
-  - API:
-    - download_toolbox.data:
-      - "download_toolbox/data/amsr.md"
-      - "download_toolbox/data/cds.md"
-      - "download_toolbox/data/esgf.md"
-      - "download_toolbox/data/osisaf.md"
-      - "download_toolbox/data/utils.md"
-    - "download_toolbox/cli.md"
-    - "download_toolbox/download.md"
-    - "download_toolbox/location.md"
-    - "download_toolbox/base.md"
-    - "download_toolbox/config.md"
-    - "download_toolbox/dataset.md"
-    - "download_toolbox/interface.md"
-    - "download_toolbox/time.md"
-    - "download_toolbox/utils.md"
   - GitHub: 'https://github.com/environmental-forecasting/download-toolbox'
 plugins:
   - search
+  # Enables automatically generating authors from git repo, see acknowledgements.md
+  - git-authors
+  # Automatically generates API section from docstrings
+  - mkdocs-autoapi:
+      autoapi_add_nav_entry: API
+      autoapi_ignore:
+        - setup.py
+  - autorefs:
+      resolve_closest: true
   - mkdocstrings:
       handlers:
         python:
+          paths:
+            - .
           options:
-            docstring_style: sphinx
+            show_submodules: true
+            docstring_style: google
             heading_level: 3
 markdown_extensions:
   - markdown_include.include:
       base_path: .
   - admonition
+  # Enables code block highlighting
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.blocks.caption
+  - pymdownx.tabbed:
+      alternate_style: true
+copyright: Copyright &copy; 2025 British Antarctic Survey / Alan Turing Institute
 
 # Include extra CSS to make some style adjustments
 extra_css:
