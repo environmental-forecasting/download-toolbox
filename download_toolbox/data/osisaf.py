@@ -280,14 +280,16 @@ class SICDownloader(ThreadedDownloader):
             monthly_file = self.dataset.frequency < Frequency.DAY
 
             if not monthly_file:
-                version_str = "v3p0"
+                res_str = ""
                 freq_path_str = "{:04d}/{:02d}"
             else:
-                version_str = "v3p0/monthly"
+                res_str = "monthly"
                 freq_path_str = "{:04d}"
 
-            ftp_conc = "/reprocessed/ice/conc/{}/{}/".format(version_str, freq_path_str)
-            ftp_reproc = "/reprocessed/ice/conc-cont-reproc/{}/{}/".format(version_str, freq_path_str)
+            # OSI-450-a1
+            ftp_conc = "/reprocessed/ice/conc/v3p1/{}/".format(res_str, freq_path_str)
+            # OSI-430-a
+            ftp_reproc = "/reprocessed/ice/conc-cont-reproc/v3p0/{}/".format(res_str, freq_path_str)
 
             if file_date < self._reproc_start:
                 file_base = "ice_conc_{}_ease2-250_cdr-v3p0".format(self._hemi_str)
