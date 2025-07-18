@@ -187,8 +187,8 @@ class BaseArgParser(argparse.ArgumentParser):
         return args
 
     def parse_known_args(self,
-                   *args,
-                   **kwargs):
+                         *args,
+                         **kwargs):
         """
         Parses command line arguments and handles unknown arguments separately.
 
@@ -312,15 +312,6 @@ class CDSDownloadArgParser(DownloadArgParser):
                           default="cds",
                           type=str)
 
-    def add_var_specs(self):
-        super().add_var_specs()
-        # TODO: short_names is experimental for CDS downloads only, but maybe should be moved to DatasetConfig
-        self.add_argument("-l", "--long-names",
-                          help="If provided, this will override name mappings for the given variable prefixes",
-                          default=None,
-                          type=csv_arg)
-        return self
-
     def add_cds_specs(self):
         """Arguments for dataset and product_type"""
         self.add_argument("-ds", "--dataset",
@@ -328,7 +319,7 @@ class CDSDownloadArgParser(DownloadArgParser):
                           type=str)
         self.add_argument("-pt", "--product-type",
                           help="Product type for the dataset",
-                          type=list,
+                          type=csv_arg,
                           default=None)
         self.add_argument("--time",
                           help="Comma separated list of times for the dataset ('00:00,01:00'...), or 'all' for all 24 hours",
@@ -356,6 +347,15 @@ class CDSDownloadArgParser(DownloadArgParser):
                           help="Frequency for derived datasets",
                           type=str,
                           default="1_hourly")
+        return self
+
+    def add_var_specs(self):
+        super().add_var_specs()
+        # TODO: short_names is experimental for CDS downloads only, but maybe should be moved to DatasetConfig
+        self.add_argument("-l", "--long-names",
+                          help="If provided, this will override name mappings for the given variable prefixes",
+                          default=None,
+                          type=csv_arg)
         return self
 
 

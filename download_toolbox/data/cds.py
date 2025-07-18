@@ -72,12 +72,13 @@ class CDSDownloader(ThreadedDownloader):
                  show_progress: bool = False,
                  start_date: object,
                  dataset_name: Union[str, None] = None,
-                 product_type: Union[list, str, None] = None,
+                 product_type: Union[list, None] = None,
                  time: Union[list, None] = None,
                  daily_statistic: str = "daily_mean",
                  time_zone: str = "utc+00:00",
                  derived_frequency: str = "1_hourly",
                  compress: Union[int, None] = None,
+                 request_args: [dict, None] = None,
                  **kwargs):
         self.client = cds.Client(progress=show_progress)
         self.dataset_name = dataset_name
@@ -88,6 +89,7 @@ class CDSDownloader(ThreadedDownloader):
         self.time_zone = time_zone
         self.derived_frequency = derived_frequency
         self.compress = compress
+        self._request_args = request_args
 
         super().__init__(dataset,
                          *args,
@@ -136,12 +138,12 @@ class CDSDownloader(ThreadedDownloader):
 
         # Default to legacy values if not provided
         if not self.product_type:
-            product_type = "reanalysis" if not monthly_request else "monthly_averaged_reanalysis_by_hour_of_day"
+            product_type = ["reanalysis",] if not monthly_request else ["monthly_averaged_reanalysis_by_hour_of_day",]
         else:
             product_type = self.product_type
 
         retrieve_dict = {
-            "product_type": product_type if type(self.product_type) is list else [product_type,],
+            "product_type": product_type,
             "variable": self.dataset.cdi_map[var_config.prefix],
             "year": [int(req_dates[0].year),],
             "month": list(set(["{:02d}".format(rd.month)
@@ -204,6 +206,10 @@ class CDSDownloader(ThreadedDownloader):
                 else:
                     time = ["12:00",]
                 retrieve_dict["time"] = time
+
+        if self._request_args is not None:
+            logging.debug("Updating request with dictionary {}".format(self._request_args))
+            retrieve_dict.update(self._request_args)
 
         if os.path.exists(temp_download_path):
             raise DownloaderError("{} already exists, this shouldn't be the case, please consider altering the "
@@ -317,7 +323,7 @@ def get_era5_available_date_range(dataset: str = "reanalysis-era5-single-levels"
 
 
 def cds_main():
-    args = CDSDownloadArgParser().add_var_specs().add_cds_specs().add_derived_specs().add_workers().parse_args()
+    args, request_args = CDSDownloadArgParser().add_var_specs().add_cds_specs().add_derived_specs().add_workers().parse_known_args()
 
     logging.info("CDS Data Downloading")
 
@@ -353,6 +359,7 @@ def cds_main():
             time_zone=args.time_zone,
             derived_frequency=args.derived_frequency,
             compress=args.compress,
+            request_args=request_args
         )
         cds.download()
 
