@@ -307,6 +307,11 @@ class CDSDownloadArgParser(DownloadArgParser):
                  **kwargs):
         super().__init__(*args, **kwargs)
 
+        self.add_argument("-i", "--identifier",
+                          help="",
+                          default="cds",
+                          type=str)
+
     def add_cds_specs(self):
         """Arguments for dataset and product_type"""
         self.add_argument("-ds", "--dataset",
