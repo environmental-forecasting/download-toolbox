@@ -308,9 +308,18 @@ class CDSDownloadArgParser(DownloadArgParser):
         super().__init__(*args, **kwargs)
 
         self.add_argument("-i", "--identifier",
-                          help="",
+                          help="Name of the output dataset where it's stored, overriding default",
                           default="cds",
                           type=str)
+
+    def add_var_specs(self):
+        super().add_var_specs()
+        # TODO: short_names is experimental for CDS downloads only, but maybe should be moved to DatasetConfig
+        self.add_argument("-l", "--long-names",
+                          help="If provided, this will override name mappings for the given variable prefixes",
+                          default=None,
+                          type=csv_arg)
+        return self
 
     def add_cds_specs(self):
         """Arguments for dataset and product_type"""
@@ -319,7 +328,8 @@ class CDSDownloadArgParser(DownloadArgParser):
                           type=str)
         self.add_argument("-pt", "--product-type",
                           help="Product type for the dataset",
-                          type=str)
+                          type=list,
+                          default=None)
         self.add_argument("--time",
                           help="Comma separated list of times for the dataset ('00:00,01:00'...), or 'all' for all 24 hours",
                           type=csv_arg,
@@ -330,7 +340,6 @@ class CDSDownloadArgParser(DownloadArgParser):
                           help="Provide an integer from 1-9 (low to high) on how much to compress the output netCDF",
                           default=None,
                           type=int)
-
         return self
 
     def add_derived_specs(self):
@@ -347,7 +356,6 @@ class CDSDownloadArgParser(DownloadArgParser):
                           help="Frequency for derived datasets",
                           type=str,
                           default="1_hourly")
-
         return self
 
 

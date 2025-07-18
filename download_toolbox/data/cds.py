@@ -41,6 +41,8 @@ class CDSDatasetConfig(DatasetConfig):
     def __init__(self,
                  identifier: str = None,
                  cdi_map: object = None,
+                 # TODO: short_names is experimental for CDS downloads only, but maybe should be moved to DatasetConfig
+                 long_names: list = None,
                  **kwargs):
         super().__init__(identifier="cds"
                          if identifier is None else identifier,
@@ -49,6 +51,9 @@ class CDSDatasetConfig(DatasetConfig):
         self._cdi_map = CDSDatasetConfig.CDI_MAP
         if cdi_map is not None:
             self._cdi_map.update(cdi_map)
+
+        if long_names is not None:
+            self._cdi_map = dict(zip([var_config.prefix for var_config in self.variables], long_names))
 
         for var_config in self.variables:
             if var_config.prefix not in self._cdi_map:
@@ -67,7 +72,7 @@ class CDSDownloader(ThreadedDownloader):
                  show_progress: bool = False,
                  start_date: object,
                  dataset_name: Union[str, None] = None,
-                 product_type: Union[str, None] = None,
+                 product_type: Union[list, str, None] = None,
                  time: Union[list, None] = None,
                  daily_statistic: str = "daily_mean",
                  time_zone: str = "utc+00:00",
@@ -136,7 +141,7 @@ class CDSDownloader(ThreadedDownloader):
             product_type = self.product_type
 
         retrieve_dict = {
-            "product_type": [product_type,],
+            "product_type": product_type if type(self.product_type) is list else [product_type,],
             "variable": self.dataset.cdi_map[var_config.prefix],
             "year": [int(req_dates[0].year),],
             "month": list(set(["{:02d}".format(rd.month)
