@@ -348,6 +348,7 @@ class DatasetConfig(DataCollection):
     def var_filepaths(self,
                       var_config: VarConfig,
                       date_batch: list,
+                      file_extension: str = "nc",
                       single_only: bool = False) -> list:
         """
 
@@ -357,7 +358,10 @@ class DatasetConfig(DataCollection):
         :return:
         """
         output_filepaths = list(set([
-            os.path.join(var_config.path, "{}.nc".format(date.strftime(self._output_group_by.date_format)))
+            os.path.join(var_config.path, "{}.{}".format(
+                date.strftime(self._output_group_by.date_format),
+                file_extension
+            ))
             for date in date_batch]))
 
         if len(output_filepaths) > 1 and single_only:
