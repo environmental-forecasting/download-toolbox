@@ -288,6 +288,7 @@ class CMIP6LegacyDownloader(ThreadedDownloader):
             if var_config.level:
                 cmip6_da = cmip6_da.sel(plev=int(var_config.level) * 100)
 
+            # Note this is happening on the remote end!
             cmip6_da = cmip6_da.sel(lat=slice(self.dataset.location.bounds[2],
                                               self.dataset.location.bounds[0]))
 

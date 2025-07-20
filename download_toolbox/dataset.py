@@ -276,8 +276,12 @@ class DatasetConfig(DataCollection):
         if var_filter_list is not None:
             ds = ds.drop_vars(var_filter_list, errors="ignore")
 
-        # TODO: Reduce spatially to required location
-        #  this will also need to set our shape details
+        # TODO: Reduce spatially to required location this will also need to set our shape details
+        # TODO: ideally we should have a broader cache that would allow us to reuse data
+        # TODO: we CANNOT handle nav_lon and nav_lat (e.g. 2D point meshes) yet
+        #if all([f in ds.coords for f in ["latitude", "longitude"]]):
+        #    ds = ds.sel(latitude=slice(self.location.bounds[0], self.location.bounds[2]),
+        #                longitude=slice(self.location.bounds[1], self.location.bounds[3]))
 
         # Reduce temporally to required resolution
         # TODO: Note, https://github.com/pydata/xarray/issues/364 for Grouper functionality?

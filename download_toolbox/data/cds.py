@@ -4,6 +4,7 @@ import re
 import requests
 import requests.adapters
 import os
+import zipfile
 
 import cdsapi as cds
 import pandas as pd
@@ -79,17 +80,19 @@ class CDSDownloader(ThreadedDownloader):
                  derived_frequency: str = "1_hourly",
                  compress: Union[int, None] = None,
                  request_args: [dict, None] = None,
+                 zipped: bool = False,
                  **kwargs):
-        self.client = cds.Client(progress=show_progress)
-        self.dataset_name = dataset_name
-        self.product_type = product_type
-        self.time = time
+        self._client = cds.Client(progress=show_progress)
+        self._dataset_name = dataset_name
+        self._product_type = product_type
+        self._time = time
         # Variables for derived daily statistics
-        self.daily_statistic = daily_statistic
-        self.time_zone = time_zone
-        self.derived_frequency = derived_frequency
-        self.compress = compress
+        self._daily_statistic = daily_statistic
+        self._time_zone = time_zone
+        self._derived_frequency = derived_frequency
+        self._compress = compress
         self._request_args = request_args
+        self._zipped = zipped
 
         super().__init__(dataset,
                          *args,
@@ -108,7 +111,7 @@ class CDSDownloader(ThreadedDownloader):
                 pool_connections=self.max_threads,
                 pool_maxsize=self.max_threads
             )
-            self.client.session.mount("https://", adapter)
+            self._client.session.mount("https://", adapter)
 
     def _single_api_download(self,
                              var_config: object,
@@ -123,10 +126,12 @@ class CDSDownloader(ThreadedDownloader):
         logging.debug("Processing {} dates for {}".format(len(req_dates), var_config))
         monthly_request = self.dataset.frequency < Frequency.DAY
 
+        retrieve_ext = "zip" if self._zipped else "nc"
         temp_download_path = os.path.join(var_config.root_path,
                                           self.dataset.location.name,
                                           "temp.{}".format(os.path.basename(
-                                              self.dataset.var_filepath(var_config, req_dates))))
+                                              self.dataset.var_filepath(var_config, req_dates,
+                                                                        file_extension=retrieve_ext))))
         download_path = os.path.join(var_config.root_path,
                                      self.dataset.location.name,
                                      os.path.basename(self.dataset.var_filepath(var_config, req_dates)))
@@ -137,10 +142,10 @@ class CDSDownloader(ThreadedDownloader):
             return [download_path]
 
         # Default to legacy values if not provided
-        if not self.product_type:
+        if not self._product_type:
             product_type = ["reanalysis",] if not monthly_request else ["monthly_averaged_reanalysis_by_hour_of_day",]
         else:
-            product_type = self.product_type
+            product_type = self._product_type
 
         retrieve_dict = {
             "product_type": product_type,
@@ -148,24 +153,27 @@ class CDSDownloader(ThreadedDownloader):
             "year": [int(req_dates[0].year),],
             "month": list(set(["{:02d}".format(rd.month)
                                for rd in sorted(req_dates)])),
-            "format": "netcdf",
-            # TODO: explicit, but should be implicit
-            "grid": [0.25, 0.25],
-            "area": self.dataset.location.bounds,
-            "download_format": "unarchived"
         }
+
+        if not self._zipped:
+            retrieve_dict.update({
+                "format": "netcdf",
+                "grid": [0.25, 0.25],
+                "area": self.dataset.location.bounds,
+                "download_format": "unarchived"
+            })
 
         # Add derived dataset-specific keys
         stats_dataset = False
-        if self.dataset_name in [
+        if self._dataset_name in [
             "derived-era5-pressure-levels-daily-statistics",
             "derived-era5-single-levels-daily-statistics"
         ]:
             stats_dataset = True
             retrieve_dict.update({
-                "daily_statistic": self.daily_statistic,
-                "time_zone": self.time_zone,
-                "frequency": self.derived_frequency
+                "daily_statistic": self._daily_statistic,
+                "time_zone": self._time_zone,
+                "frequency": self._derived_frequency
             })
 
         level_id = "single-levels"
@@ -174,15 +182,15 @@ class CDSDownloader(ThreadedDownloader):
             retrieve_dict["pressure_level"] = [var_config.level]
 
         # Default to legacy values if not provided
-        if not self.product_type:
+        if not self._product_type:
             dataset = "reanalysis-era5-{}{}".format(level_id, "-monthly-means" if monthly_request else "")
         else:
             # TODO: this is a bit of a hack, but it works for now
             # Updating dataset name if multiple pressure levels are requested
-            if var_config.level and "single-levels" in self.dataset_name:
-                dataset = self.dataset_name.replace("single-levels", "pressure-levels")
+            if var_config.level and "single-levels" in self._dataset_name:
+                dataset = self._dataset_name.replace("single-levels", "pressure-levels")
             else:
-                dataset = self.dataset_name
+                dataset = self._dataset_name
 
         # FIXME: this is quite shaky, not using at present
         #    # _, date_end = get_era5_available_date_range(dataset)
@@ -198,11 +206,11 @@ class CDSDownloader(ThreadedDownloader):
 
             # No time key required for daily stats dataset, instead uses `time_zone`
             if not stats_dataset:
-                if self.time and isinstance(self.time, list):
-                    if self.time[0] == "all":
+                if self._time and isinstance(self._time, list):
+                    if self._time[0] == "all":
                         time = ["{:02d}:00".format(h) for h in range(0, 24)]
                     else:
-                        time = self.time
+                        time = self._time
                 else:
                     time = ["12:00",]
                 retrieve_dict["time"] = time
@@ -212,30 +220,44 @@ class CDSDownloader(ThreadedDownloader):
             retrieve_dict.update(self._request_args)
 
         if os.path.exists(temp_download_path):
-            raise DownloaderError("{} already exists, this shouldn't be the case, please consider altering the "
-                                  "time resolution of request to avoid downloaded data clashes".format(temp_download_path))
+            # TODO: we need a better mechanism for keeping temp files and reprocessing
+            if self._zipped:
+                logging.warning("{} already exists, all we can do is assume to try and reprocess".format(temp_download_path))
+            else:
+                raise DownloaderError("{} already exists, this shouldn't be the case".format(temp_download_path))
+        else:
+            try:
+                logging.info("Downloading data for {}...".format(var_config.name))
+                logging.debug("Request dataset {} with:\n".format(pformat(retrieve_dict)))
+                self._client.retrieve(
+                    dataset,
+                    retrieve_dict,
+                    temp_download_path)
+                logging.info("Download completed: {}".format(temp_download_path))
+            # cdsapi uses raise Exception in many places, so having a catch-all is appropriate
+            except Exception as e:
+                logging.exception("{} not downloaded, look at the problem".format(temp_download_path))
+                self.missing_dates.extend(req_dates)
+                return []
 
-        try:
-            logging.info("Downloading data for {}...".format(var_config.name))
-            logging.debug("Request dataset {} with:\n".format(pformat(retrieve_dict)))
-            self.client.retrieve(
-                dataset,
-                retrieve_dict,
-                temp_download_path)
-            logging.info("Download completed: {}".format(temp_download_path))
+        if self._zipped:
+            zf = zipfile.ZipFile(temp_download_path)
+            zipped_data_files = [df_name for df_name in zf.namelist() if df_name.endswith(".nc")]
+            zip_output_path = os.path.join(var_config.root_path,
+                                           self.dataset.location.name)
+            zf.extractall(path=zip_output_path,
+                          members=zipped_data_files)
 
-        # cdsapi uses raise Exception in many places, so having a catch-all is appropriate
-        except Exception as e:
-            logging.exception("{} not downloaded, look at the problem".format(temp_download_path))
-            self.missing_dates.extend(req_dates)
-            return []
-
-        ds = xr.open_dataset(temp_download_path)
+            # For the moment we'll keep the zips
+            temp_download_path = [os.path.join(zip_output_path, zf) for zf in zipped_data_files]
+            ds = xr.open_mfdataset(temp_download_path)
+        else:
+            ds = xr.open_dataset(temp_download_path)
 
         # TODO: there is duplicated / messy code here from CDS API alterations, clean it up
         # New CDSAPI file holds more data_vars than just variable.
         # Omit them when figuring out default CDS variable name.
-        omit_vars = {"number", "expver", "time", "date", "valid_time", "latitude", "longitude"}
+        omit_vars = {"number", "expver", "time", "date", "valid_time", "latitude", "longitude", "time_counter_bnds"}
         data_vars = set(ds.data_vars)
         var_list = list(data_vars.difference(omit_vars))
         if not var_list:
@@ -255,6 +277,15 @@ class CDSDownloader(ThreadedDownloader):
             rename_vars.update({"date": "time"})
         elif "valid_time" in ds:
             rename_vars.update({"valid_time": "time"})
+        elif "time_counter" in ds:
+            rename_vars.update({"time_counter": "time"})
+
+        if all([f in ds for f in ["nav_lat", "nav_lon"]]):
+            logging.warning("We have nav_lat and nav_lon which suggests a tripolar grid"
+                            " which we cannot convert within the downloader yet")
+            northing, westing, southing, easting = self.dataset.location.bounds
+            # FIXME: naively grab the output based on the latitude
+            ds = ds.where(((ds.nav_lat <= northing) & (ds.nav_lat >= southing)).compute(), drop=True)
 
         da = getattr(ds.rename(rename_vars), var_name)
 
@@ -286,13 +317,16 @@ class CDSDownloader(ThreadedDownloader):
             # Ref: https://confluence.ecmwf.int/pages/viewpage.action?pageId=173385064
             # da = da.sel(expver=1).combine_first(da.sel(expver=5))
             da = da.drop_vars("expver")
-        logging.info("Saving corrected ERA5 file to {}".format(download_path))
-        xr_save_netcdf(da, download_path, complevel=self.compress)
+        logging.info("Saving corrected CDS file to {}".format(download_path))
+        xr_save_netcdf(da, download_path, complevel=self._compress)
         da.close()
 
-        if os.path.exists(temp_download_path):
-            logging.debug("Removing {}".format(temp_download_path))
-            os.unlink(temp_download_path)
+        if type(temp_download_path) is not list:
+            temp_download_path = [temp_download_path,]
+            for tdp in temp_download_path:
+                if os.path.exists(tdp):
+                    logging.info("Removing {}".format(tdp))
+                    os.unlink(tdp)
 
         return [download_path]
 
@@ -323,7 +357,17 @@ def get_era5_available_date_range(dataset: str = "reanalysis-era5-single-levels"
 
 
 def cds_main():
-    args, request_args = CDSDownloadArgParser().add_var_specs().add_cds_specs().add_derived_specs().add_workers().parse_known_args()
+    args, request_args = (CDSDownloadArgParser().
+                          add_var_specs().
+                          add_cds_specs().
+                          add_derived_specs().
+                          add_workers().
+                          add_extra_args([
+                            (("-z", "--zipped"), dict(action="store_true", default=False,
+                                                      help="Zipped version only available, changes request "
+                                                           "setup and post-processing prior to save"))
+                          ]).
+                          parse_known_args())
 
     logging.info("CDS Data Downloading")
 
@@ -342,6 +386,7 @@ def cds_main():
         output_group_by=getattr(Frequency, args.output_group_by),
         config_path=args.config,
         overwrite=args.overwrite_config,
+        long_names=args.long_names
     )
 
     for start_date, end_date in zip(args.start_dates, args.end_dates):
@@ -359,7 +404,8 @@ def cds_main():
             time_zone=args.time_zone,
             derived_frequency=args.derived_frequency,
             compress=args.compress,
-            request_args=request_args
+            request_args=request_args,
+            zipped=args.zipped
         )
         cds.download()
 
