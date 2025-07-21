@@ -251,7 +251,9 @@ class CDSDownloader(ThreadedDownloader):
                           members=zipped_data_files)
 
             # For the moment we'll keep the zips
-            temp_download_path = [os.path.join(zip_output_path, zf) for zf in zipped_data_files]
+            temp_download_path = [os.path.join(zip_output_path, df_name)
+                                  for df_name in zf.namelist()
+                                  if df_name.endswith(".nc")]
             ds = xr.open_mfdataset(temp_download_path)
         else:
             ds = xr.open_dataset(temp_download_path)
