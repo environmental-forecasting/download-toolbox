@@ -242,9 +242,11 @@ class CDSDownloader(ThreadedDownloader):
 
         if self._zipped:
             zf = zipfile.ZipFile(temp_download_path)
-            zipped_data_files = [df_name for df_name in zf.namelist() if df_name.endswith(".nc")]
             zip_output_path = os.path.join(var_config.root_path,
                                            self.dataset.location.name)
+            zipped_data_files = [df_name for df_name in zf.namelist()
+                                 if df_name.endswith(".nc")
+                                 and not os.path.exists(os.path.join(zip_output_path, df_name))]
             zf.extractall(path=zip_output_path,
                           members=zipped_data_files)
 
@@ -323,10 +325,10 @@ class CDSDownloader(ThreadedDownloader):
 
         if type(temp_download_path) is not list:
             temp_download_path = [temp_download_path,]
-            for tdp in temp_download_path:
-                if os.path.exists(tdp):
-                    logging.info("Removing {}".format(tdp))
-                    os.unlink(tdp)
+        for tdp in temp_download_path:
+            if os.path.exists(tdp):
+                logging.info("Removing {}".format(tdp))
+                os.unlink(tdp)
 
         return [download_path]
 
