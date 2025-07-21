@@ -66,6 +66,15 @@ class CDSDatasetConfig(DatasetConfig):
         return self._cdi_map
 
 
+class ERA5DatasetConfig(CDSDatasetConfig):
+    """
+    ERA5DatasetConfig - replaced now by CDSDatasetConfig
+
+    Provided for backwards compatibility only
+    """
+    pass
+
+
 class CDSDownloader(ThreadedDownloader):
     def __init__(self,
                  dataset: CDSDatasetConfig,
@@ -449,7 +458,7 @@ def era5_main():
             else "monthly_averaged_reanalysis_by_hour_of_day"
 
         dataset = CDSDatasetConfig(
-            identifier="era5" if args.identifier is None else args.identifier,
+            identifier="era5",
             levels=levels,
             location=location,
             var_names=var_names,
