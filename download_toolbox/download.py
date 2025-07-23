@@ -2,6 +2,7 @@ import abc
 import concurrent
 import logging
 from abc import ABCMeta, abstractmethod
+from typing import Union
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -31,6 +32,7 @@ class Downloader(metaclass=abc.ABCMeta):
     def __init__(self,
                  dataset: DatasetConfig,
                  *args,
+                 batch_frequency: Union[Frequency, None] = None,
                  delete_tempfiles: bool = True,
                  download: bool = True,
                  drop_vars: list = None,

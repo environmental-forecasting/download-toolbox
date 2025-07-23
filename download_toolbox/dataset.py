@@ -401,6 +401,10 @@ class DatasetConfig(DataCollection):
     def var_files(self):
         return self._var_files
 
+    @property
+    def var_prefixes(self):
+        return self._var_names
+
     @var_files.setter
     def var_files(self, value: dict):
         logging.warning("Setting new file setup to dataset with {} files".format(
