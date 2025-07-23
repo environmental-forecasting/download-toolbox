@@ -24,6 +24,10 @@ class MARSDownloadArgParser(DownloadArgParser):
                           help="Name of the output dataset where it's stored, overriding default",
                           default="mars",
                           type=str)
+        self.add_argument("--compress",
+                          help="Provide an integer from 1-9 (low to high) on how much to compress the output netCDF",
+                          default=None,
+                          type=int)
 
     def add_var_specs(self):
         super().add_var_specs()
@@ -198,7 +202,6 @@ def mars_main():
                           add_workers().
                           parse_known_args())
     logging.info("MARS API data downloading")
-    # download_mars -w 1  -v -f MONTH -o YEAR south 2025-01-01 2025-06-30 siconca '' em msmm 31.128 siconc
 
     location = Location(
         name=args.hemisphere,
@@ -229,7 +232,7 @@ def mars_main():
             max_threads=args.workers,
             request_frequency=getattr(Frequency, args.output_group_by),
             request_args=request_args,
-            #compress=args.compress,
+            compress=args.compress,
         )
         mars.download()
 

@@ -13,12 +13,70 @@ import xarray as xr
 from pprint import pformat
 from typing import Union
 
-from download_toolbox.cli import CDSDownloadArgParser, DownloadArgParser
+from download_toolbox.cli import DownloadArgParser, csv_arg
 from download_toolbox.dataset import DatasetConfig
 from download_toolbox.data.utils import xr_save_netcdf
 from download_toolbox.download import ThreadedDownloader, DownloaderError
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
+
+
+class CDSDownloadArgParser(DownloadArgParser):
+    def __init__(self,
+                 *args,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.add_argument("-i", "--identifier",
+                          help="Name of the output dataset where it's stored, overriding default",
+                          default="cds",
+                          type=str)
+
+    def add_cds_specs(self):
+        """Arguments for dataset and product_type"""
+        self.add_argument("-ds", "--dataset",
+                          help="Dataset to download",
+                          type=str)
+        self.add_argument("-pt", "--product-type",
+                          help="Product type for the dataset",
+                          type=csv_arg,
+                          default=None)
+        self.add_argument("--time",
+                          help="Comma separated list of times for the dataset ('00:00,01:00'...), or 'all' for all 24 hours",
+                          type=csv_arg,
+                          default=[])
+
+        # TODO: Pull this to constructor and update other downloaders
+        self.add_argument("--compress",
+                          help="Provide an integer from 1-9 (low to high) on how much to compress the output netCDF",
+                          default=None,
+                          type=int)
+        return self
+
+    def add_derived_specs(self):
+        """Arguments for derived datasets"""
+        self.add_argument("--daily-statistic",
+                          help="Daily statistic for derived datasets",
+                          type=str,
+                          default="daily_mean")
+        self.add_argument("--time-zone",
+                          help="Time zone for derived datasets",
+                          type=str,
+                          default="utc+00:00")
+        self.add_argument("--derived-frequency",
+                          help="Frequency for derived datasets",
+                          type=str,
+                          default="1_hourly")
+        return self
+
+    def add_var_specs(self):
+        super().add_var_specs()
+        # TODO: short_names is experimental for CDS downloads only, but maybe should be moved to DatasetConfig
+        self.add_argument("-l", "--long-names",
+                          help="If provided, this will override name mappings for the given variable prefixes",
+                          default=None,
+                          type=csv_arg)
+        return self
 
 
 class CDSDatasetConfig(DatasetConfig):

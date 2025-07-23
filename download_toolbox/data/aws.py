@@ -1,3 +1,4 @@
+import argparse
 import concurrent
 import datetime as dt
 import logging
@@ -13,13 +14,39 @@ from botocore import UNSIGNED
 from botocore.config import Config
 from functools import partial
 
-from download_toolbox.cli import AWSDownloadArgParser
+from download_toolbox.cli import DownloadArgParser
 from download_toolbox.data.cds import CDSDatasetConfig
 from download_toolbox.data.utils import batch_requested_dates, s3_file_download, xr_save_netcdf
 from download_toolbox.dataset import DatasetConfig
 from download_toolbox.download import DownloaderError, ThreadedDownloader
 from download_toolbox.location import Location
 from download_toolbox.time import Frequency
+
+
+class AWSDownloadArgParser(DownloadArgParser):
+    """Arguments for AWS datasets"""
+    def __init__(self,
+                 *args,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def add_aws_specs(self):
+        self.add_argument("--delete-cache",
+                          help="Delete raw source download cached files after saving output netCDFs",
+                          default=False,
+                          action=argparse.BooleanOptionalAction)
+        self.add_argument("--cache-only",
+                          help="Only download the source files into the filecache, do nothing else",
+                          default=False,
+                          action=argparse.BooleanOptionalAction)
+
+        # TODO: Pull this to constructor and update other downloaders
+        self.add_argument("--compress",
+                          help="Provide an integer from 1-9 (low to high) on how much to compress the output netCDF",
+                          default=None,
+                          type=int)
+
+        return self
 
 
 class AWSDatasetConfig(DatasetConfig):
@@ -588,9 +615,10 @@ class AWSDownloader(ThreadedDownloader):
         return downloaded_paths
 
     def _single_download(self,
-                         args: list) -> list:
-        logging.warning("You're not going to get data by calling this! "
-                        "Set download_method to an actual implementation.")
+                         *args: list) -> list:
+        raise RuntimeError("You're not going to get data by calling this! "
+                           "Set download_method to an actual implementation.")
+
 
 def main():
     args = AWSDownloadArgParser().add_var_specs().add_aws_specs().add_workers().parse_args()
