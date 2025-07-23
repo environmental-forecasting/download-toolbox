@@ -366,7 +366,6 @@ class AWSDownloadArgParser(DownloadArgParser):
                  **kwargs):
         super().__init__(*args, **kwargs)
 
-
     def add_aws_specs(self):
         self.add_argument("--delete-cache",
                           help="Delete raw source download cached files after saving output netCDFs",

@@ -15,13 +15,15 @@ from download_toolbox.time import Frequency
 
 
 class MARSDownloadArgParser(DownloadArgParser):
-    def __init__(self, *args, **kwargs):
+    def __init__(self,
+                 *args,
+                 **kwargs):
         super().__init__(*args, **kwargs)
 
-        # TODO: this is a common feature to be after
-        self.add_argument("-b", "--batch-frequency",
-                          choices=[_.name for _ in list(Frequency)],
-                          default=None)
+        self.add_argument("-i", "--identifier",
+                          help="Name of the output dataset where it's stored, overriding default",
+                          default="mars",
+                          type=str)
 
     def add_var_specs(self):
         super().add_var_specs()
@@ -50,11 +52,13 @@ class MARSDownloadArgParser(DownloadArgParser):
 
 class MARSDataset(DatasetConfig):
     def __init__(self,
+                 *args,
                  identifier: str = None,
                  params: list = None,
                  attributes: list = None,
                  **kwargs):
-        super().__init__(identifier="mars"
+        super().__init__(*args,
+                         identifier="mars"
                          if identifier is None else identifier,
                          **kwargs)
 
@@ -79,17 +83,22 @@ class MARSDownloader(Downloader):
                  product_class: str = "od",
                  system: int = 5,
                  compress: Union[int, None] = None,
+                 request_args: [dict, None] = None,
                  **kwargs):
         self._product_class = product_class
         self._product_type = product_type
         self._stream = stream
         self._system = system
         self._compress = compress
+        self._request_args = request_args
 
         self._server = ecmwfapi.ECMWFService("mars")
 
         super().__init__(dataset,
                          *args,
+                         # TODO: not true, this could be max HOUR, need to implement
+                         source_min_frequency=Frequency.YEAR,
+                         source_max_frequency=Frequency.MONTH,
                          **kwargs)
 
     def _single_download(self,
@@ -113,11 +122,11 @@ class MARSDownloader(Downloader):
         request_template = """        retrieve,
           class={product_class},
           date={date},
-          expver=1,
+          {request_args}expver=1,
           levtype={levtype},
           {levlist}param={params},
+          method=1,
           origin=ecmf,
-          step={step},
           stream={stream},
           system={system},
           time=00:00:00,
@@ -127,33 +136,34 @@ class MARSDownloader(Downloader):
           target="{target}",
           format=netcdf
             """
+        #          step={step},
 
         levtype = "plev" if var_config.level else "sfc"
 
-        if self.request_frequency == Frequency.YEAR:
+        if self.request_frequency <= Frequency.MONTH:
             req_dates = [dt.replace(day=1) for dt in req_dates]
 
         request = request_template.format(
             area="/".join([str(s) for s in self.dataset.location.bounds]),
             date="/".join([el.strftime("%Y%m%d") for el in req_dates]),
             levtype=levtype,
-            levlist="levelist={},\n  ".format(var_config.level)
+            levlist="levelist={},\n          ".format(var_config.level)
             if var_config.level else "",
             params=self.dataset.mars_mapping[var_config.prefix]['param'],
             product_class=self._product_class,
             product_type=self._product_type,
+            request_args="".join(["{}={},\n          ".format(k, v) for k, v in self._request_args.items()])
+                         if self._request_args is not None else "",
             # TODO: specify - limitations based on access rights to ecmwf data
             step=0,
             stream=self._stream,
             system=self._system,
-            target=temp_download_path,
+            target=os.path.basename(temp_download_path),
         )
 
         if not os.path.exists(temp_download_path):
             logging.debug("MARS REQUEST: \n{}\n".format(request))
-            import sys
-            print()
-            sys.exit(0)
+            #import sys; sys.exit(0)
             try:
                 self._server.execute(request, temp_download_path)
             except ecmwfapi.api.APIException:
@@ -165,29 +175,30 @@ class MARSDownloader(Downloader):
         logging.debug("Files downloaded: {}".format(temp_download_path))
 
         ds = xr.open_dataset(temp_download_path)
-        da = getattr(ds, self.dataset.mars_mapping[var_config.prefix]['param'])
+        da = getattr(ds, self.dataset.mars_mapping[var_config.prefix]['attribute'])
 
         if var_config.level:
             da = da.sel(level=int(var_config.level))
 
-            logging.info("Saving MARS file to {}".format(download_path))
-            xr_save_netcdf(da, download_path, complevel=self._compress)
+        logging.info("Saving MARS file to {}".format(download_path))
+        xr_save_netcdf(da, download_path, complevel=self._compress)
 
         ds.close()
 
-        if os.path.exists(temp_download_path):
-            logging.info("Removing {}".format(temp_download_path))
-            os.unlink(temp_download_path)
+        #if os.path.exists(temp_download_path):
+        #    logging.info("Removing {}".format(temp_download_path))
+        #    os.unlink(temp_download_path)
 
         return [download_path]
 
 
 def mars_main():
-    args = MARSDownloadArgParser().add_var_specs().add_workers().parse_args()
-    logging.info("MARS SEAS data downloading")
-    # download_mars -w 1  -v -f MONTH -o YEAR south 2025-01-01 2025-06-30 siconca '' fc 31.128 siconc
-
-    logging.info("CDS Data Downloading")
+    args, request_args = (MARSDownloadArgParser().
+                          add_var_specs().
+                          add_workers().
+                          parse_known_args())
+    logging.info("MARS API data downloading")
+    # download_mars -w 1  -v -f MONTH -o YEAR south 2025-01-01 2025-06-30 siconca '' em msmm 31.128 siconc
 
     location = Location(
         name=args.hemisphere,
@@ -217,6 +228,7 @@ def mars_main():
             end_date=end_date,
             max_threads=args.workers,
             request_frequency=getattr(Frequency, args.output_group_by),
+            request_args=request_args,
             #compress=args.compress,
         )
         mars.download()

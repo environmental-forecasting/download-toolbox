@@ -32,7 +32,6 @@ class Downloader(metaclass=abc.ABCMeta):
     def __init__(self,
                  dataset: DatasetConfig,
                  *args,
-                 batch_frequency: Union[Frequency, None] = None,
                  delete_tempfiles: bool = True,
                  download: bool = True,
                  drop_vars: list = None,
