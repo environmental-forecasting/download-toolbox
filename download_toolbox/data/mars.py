@@ -237,6 +237,7 @@ def mars_main():
         mars.download()
 
         dataset.save_data_for_config(
+            rename_var_list={a: v for a, v in zip(args.attributes, args.vars)},
             source_files=mars.files_downloaded,
             var_filter_list=["lambert_azimuthal_equal_area"],
         )
