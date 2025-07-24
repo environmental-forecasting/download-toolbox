@@ -47,13 +47,16 @@ class AMSRDownloader(ThreadedDownloader):
     more sensible - the zips are not consistently avialable across the data ranges
 
     We use the following for HTTPS downloads:
-        - https://data.seaice.uni-bremen.de
+        - data.seaice.uni-bremen.de
+    But can also use (noticed when the above was down!)
+        - seaice.uni-bremen.de/data/
 
     """
     def __init__(self,
                  dataset: AMSRDatasetConfig,
                  *args,
                  start_date: object,
+                 host: str = "data.seaice.uni-bremen.de",
                  **kwargs):
         amsr2_start = dt.date(2012, 7, 2)
 
@@ -61,7 +64,8 @@ class AMSRDownloader(ThreadedDownloader):
         if start_date < amsr2_start:
             raise DownloaderError("AMSR2 only exists past {}".format(amsr2_start))
         self._hemi_str = "s" if dataset.location.south else "n"
-        self._http_client = HTTPClient("https://data.seaice.uni-bremen.de",
+
+        self._http_client = HTTPClient("https://{}".format(host),
                                        source_base="amsr2/asi_daygrid_swath/{}{}/netcdf".format(
                                            self._hemi_str, "{:1.3f}".format(dataset.resolution).replace(".", "")))
 
@@ -106,6 +110,11 @@ class AMSRDownloader(ThreadedDownloader):
 
 def main():
     args = DownloadArgParser().add_workers().add_extra_args([
+        (["--host"], dict(
+            type=str,
+            default="data.seaice.uni-bremen.de",
+            help="Host portion of URI to download from",
+        )),
         (["-r", "--resolution"], dict(
             type=float,
             choices=[3.125, 6.25],
@@ -137,6 +146,7 @@ def main():
         logging.info("Downloading between {} and {}".format(start_date, end_date))
         sic = AMSRDownloader(
             dataset,
+            host=args.host,
             max_threads=args.workers,
             start_date=start_date,
             end_date=end_date,

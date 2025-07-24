@@ -2,6 +2,7 @@ import abc
 import concurrent
 import logging
 from abc import ABCMeta, abstractmethod
+from typing import Union
 
 from concurrent.futures import ThreadPoolExecutor
 

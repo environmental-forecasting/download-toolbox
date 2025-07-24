@@ -3,7 +3,6 @@ import datetime as dt
 import logging
 import re
 
-
 from download_toolbox.time import Frequency
 
 """
@@ -102,6 +101,48 @@ def int_or_list_arg(string: str) -> object:
     return val
 
 
+def parse_known_args(unknown_args: list) -> dict:
+    """
+    Parses a list of unknown command line arguments and returns them.
+
+    This function processes both long and short options, and supports boolean flags
+    (e.g., `--flag` or `-f`). Non-option arguments are added to the dictionary as
+    values associated with their preceding option keys.
+
+    Args:
+        unknown_args: A list of command line arguments.
+
+    Returns:
+        A dictionary containing parsed arguments.
+        Keys are converted to snake_case for consistency,
+        with how argparse would return them.
+    """
+    result = {}
+    key = None
+
+    for arg in unknown_args:
+        if arg.startswith("--"):
+            # Cover long option
+            if key:
+                result[key] = True
+            key = arg.lstrip("-").replace("-", "_")
+        elif len(arg) > 1 and arg.startswith("-"):
+            # Cover short option
+            key = arg.replace("-", "_")
+            result[key] = True
+        else:
+            if key:
+                result[key] = arg
+                key = None
+            else:
+                pass
+
+    if key:
+        result[key] = True
+
+    return result
+
+
 class BaseArgParser(argparse.ArgumentParser):
     """An ArgumentParser specialised to support common argument handling
 
@@ -141,8 +182,45 @@ class BaseArgParser(argparse.ArgumentParser):
                    **kwargs):
         args = super().parse_args(*args, **kwargs)
 
+        self.setup_logging(verbose=args.verbose)
+
+        return args
+
+    def parse_known_args(self,
+                         *args,
+                         **kwargs):
+        """
+        Parses command line arguments and handles unknown arguments separately.
+
+        This method first calls the argparse's `parse_known_args` method to separate
+        known and unknown arguments. It then parses the unknown arguments using
+        the `parse_known_args` function to convert the returned list to a dict.
+
+        Args:
+            *args: Variable length argument list.
+            **kwargs: Arbitrary keyword arguments.
+
+        Returns:
+            A tuple containing the parsed Namespace object for known arguments
+            and a dictionary of parsed unknown arguments.
+        """
+        args, unknown_args_list = super().parse_known_args(*args, **kwargs)
+
+        unknown_args = parse_known_args(unknown_args_list)
+
+        self.setup_logging(verbose=args.verbose)
+
+        return args, unknown_args
+
+    def setup_logging(self, verbose: bool) -> None:
+        """
+        Configures logging based on verbosity and suppresses logs from specific modules.
+
+        Args:
+            verbose: Whether to enable debug-level logging.
+        """
         # TODO: this is not necessarily ideal when running the argparser in notebooks
-        loglevel = logging.DEBUG if args.verbose else logging.INFO
+        loglevel = logging.DEBUG if verbose else logging.INFO
         logging.basicConfig(
             datefmt="%d-%m-%y %T",
             format=self._log_format,
@@ -160,8 +238,6 @@ class BaseArgParser(argparse.ArgumentParser):
         logging.getLogger("requests").setLevel(logging.WARNING)
         logging.getLogger("urllib3").setLevel(logging.WARNING)
         logging.getLogger("matplotlib").setLevel(logging.WARNING)
-
-        return args
 
 
 class DownloadArgParser(BaseArgParser):
@@ -224,74 +300,3 @@ class DownloadArgParser(BaseArgParser):
                                    format(args.vars, args.levels))
         return args
 
-
-class CDSDownloadArgParser(DownloadArgParser):
-    def __init__(self,
-                 *args,
-                 **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def add_cds_specs(self):
-        """Arguments for dataset and product_type"""
-        self.add_argument("-ds", "--dataset",
-                          help="Dataset to download",
-                          type=str)
-        self.add_argument("-pt", "--product-type",
-                          help="Product type for the dataset",
-                          type=str)
-        self.add_argument("--time",
-                          help="Comma separated list of times for the dataset ('00:00,01:00'...), or 'all' for all 24 hours",
-                          type=csv_arg,
-                          default=[])
-
-        # TODO: Pull this to constructor and update other downloaders
-        self.add_argument("--compress",
-                          help="Provide an integer from 1-9 (low to high) on how much to compress the output netCDF",
-                          default=None,
-                          type=int)
-
-        return self
-
-    def add_derived_specs(self):
-        """Arguments for derived datasets"""
-        self.add_argument("--daily-statistic",
-                          help="Daily statistic for derived datasets",
-                          type=str,
-                          default="daily_mean")
-        self.add_argument("--time-zone",
-                          help="Time zone for derived datasets",
-                          type=str,
-                          default="utc+00:00")
-        self.add_argument("--derived-frequency",
-                          help="Frequency for derived datasets",
-                          type=str,
-                          default="1_hourly")
-
-        return self
-
-
-class AWSDownloadArgParser(DownloadArgParser):
-    """Arguments for AWS datasets"""
-    def __init__(self,
-                 *args,
-                 **kwargs):
-        super().__init__(*args, **kwargs)
-
-
-    def add_aws_specs(self):
-        self.add_argument("--delete-cache",
-                          help="Delete raw source download cached files after saving output netCDFs",
-                          default=False,
-                          action=argparse.BooleanOptionalAction)
-        self.add_argument("--cache-only",
-                          help="Only download the source files into the filecache, do nothing else",
-                          default=False,
-                          action=argparse.BooleanOptionalAction)
-
-        # TODO: Pull this to constructor and update other downloaders
-        self.add_argument("--compress",
-                          help="Provide an integer from 1-9 (low to high) on how much to compress the output netCDF",
-                          default=None,
-                          type=int)
-
-        return self

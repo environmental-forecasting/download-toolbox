@@ -48,10 +48,9 @@ classifiers = [
 download_aws = "download_toolbox.data.aws:main"
 download_cds = "download_toolbox.data.cds:cds_main"
 download_cmip = "download_toolbox.data.esgf:main"
-download_era5 = "download_toolbox.data.cds:era5_main"
+download_era5 = "download_toolbox.data.cds:cds_main"
 download_oras5 = "download_toolbox.data.cmems:main"
-download_hres = "download_toolbox.data.mars:hres_main"
-download_seas = "download_toolbox.data.mars:seas_main"
+download_mars = "download_toolbox.data.mars:mars_main"
 download_osisaf = "download_toolbox.data.osisaf:main"
 download_amsr2 = "download_toolbox.data.amsr:main"
 
