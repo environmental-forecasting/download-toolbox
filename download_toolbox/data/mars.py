@@ -44,11 +44,11 @@ class MARSDownloadArgParser(DownloadArgParser):
                           type=str,
                           default=None)
         self.add_argument("params",
-                          help="If provided, this will override name mappings for the given variable prefixes",
+                          help="This provides the necessary ECMWF parameter IDs for requests",
                           default=None,
                           type=csv_arg)
         self.add_argument("attributes",
-                          help="If provided, this will override name mappings for the given variable prefixes",
+                          help="This provides the necessary ECMWF attribute names to select data with",
                           default=None,
                           type=csv_arg)
         return self
