@@ -66,6 +66,13 @@ class MARSDataset(DatasetConfig):
                          if identifier is None else identifier,
                          **kwargs)
 
+        # Handle reverse mapping of keyword parameters back to arguments: it is a hack
+        # but allows the reconstruction of the object
+        if "mars_mapping" in kwargs and params is None and attributes is None:
+            print(kwargs["mars_mapping"])
+            params = [v["param"] for v in kwargs["mars_mapping"].values()]
+            attributes = [v["attribute"] for v in kwargs["mars_mapping"].values()]
+
         if not(len(params) == len(attributes) == len(self.var_prefixes)):
             raise AttributeError("The number of parameter strings, attributes and variables must match: {} vs {} vs {}"
                                  .format(len(params), len(attributes), len(self.variables)))
