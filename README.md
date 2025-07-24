@@ -57,14 +57,15 @@ hopefully be dealt with in time! They likely don't have issues related, yet.
 
 * Works only for hemisphere level downloading - north or south. The overhaul for this intends to ensure that identifiers are used so that someone can specify "north" or "south" but equally specify "Norway" or "The Shops" and then provide a geolocation that would identify the dataset within the filesystem.
 
-**This is currently very heavy development functionality, but the following downloaders should work**: 
+**This is currently in development, but the following downloaders do work well**: 
 
 * download_amsr2
+* download_aws
 * download_cmip
 * download_era5
+* download_mars
+* download_oras5
 * download_osisaf
-
-Other stubs might not work, but there is a chance I'll forget to update these docs!
 
 ## Contributing 
 
