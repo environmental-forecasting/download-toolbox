@@ -28,6 +28,10 @@ class MARSDownloadArgParser(DownloadArgParser):
                           help="Provide an integer from 1-9 (low to high) on how much to compress the output netCDF",
                           default=None,
                           type=int)
+        self.add_argument("-l", "--time-is-leadtime",
+                          help="Requested data is, in fact, presenting time as leadtime (such as for forecasts)",
+                          action="store_true",
+                          default=False)
 
     def add_var_specs(self):
         super().add_var_specs()
@@ -94,6 +98,7 @@ class MARSDownloader(Downloader):
                  system: int = 5,
                  compress: Union[int, None] = None,
                  request_args: [dict, None] = None,
+                 leadtime_request: bool = False,
                  **kwargs):
         self._product_class = product_class
         self._product_type = product_type
@@ -101,6 +106,7 @@ class MARSDownloader(Downloader):
         self._system = system
         self._compress = compress
         self._request_args = request_args
+        self._leadtime_request = leadtime_request
 
         self._server = ecmwfapi.ECMWFService("mars")
 
@@ -171,9 +177,8 @@ class MARSDownloader(Downloader):
             target=os.path.basename(temp_download_path),
         )
 
+        logging.debug("MARS REQUEST: \n{}\n".format(request))
         if not os.path.exists(temp_download_path):
-            logging.debug("MARS REQUEST: \n{}\n".format(request))
-            #import sys; sys.exit(0)
             try:
                 self._server.execute(request, temp_download_path)
             except ecmwfapi.api.APIException:
@@ -190,11 +195,15 @@ class MARSDownloader(Downloader):
         if var_config.level:
             da = da.sel(level=int(var_config.level))
 
+        if self._leadtime_request:
+            da = da.rename({"time": "leadtime"})
+            da = da.expand_dims(dim={"time": [da.leadtime.values[0],]}, axis=0)
+
         logging.info("Saving MARS file to {}".format(download_path))
         xr_save_netcdf(da, download_path, complevel=self._compress)
-
         ds.close()
 
+        # FIXME: delete temp files normally!
         #if os.path.exists(temp_download_path):
         #    logging.info("Removing {}".format(temp_download_path))
         #    os.unlink(temp_download_path)
@@ -240,6 +249,7 @@ def mars_main():
             request_frequency=getattr(Frequency, args.output_group_by),
             request_args=request_args,
             compress=args.compress,
+            leadtime_request=args.time_is_leadtime
         )
         mars.download()
 
