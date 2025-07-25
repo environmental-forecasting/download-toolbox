@@ -216,6 +216,7 @@ def mars_main():
     )
 
     dataset = MARSDataset(
+        identifier=args.identifier,
         levels=args.levels,
         location=location,
         var_names=args.vars,
